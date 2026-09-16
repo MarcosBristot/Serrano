@@ -6,6 +6,28 @@ __pycache__/
 # C extensions
 *.so
 
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environment
+.venv/
+
+# Testes
+.pytest_cache/
+
+# Ruff
+.ruff_cache/
+
+# IDE
+.vscode/
+.idea/
+
+# Environment variables
+.env
+.env.*
+
 # Distribution / packaging
 .Python
 build/

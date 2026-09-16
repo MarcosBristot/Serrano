@@ -1,0 +1,21 @@
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle / estilo PEP 8
+    "W",  # warnings de estilo
+    "F",  # Pyflakes / erros comuns
+    "I",  # organização de imports
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.6.2",
+    "pytest>=9.1.1",
+    "ruff>=0.16.7",
+]
