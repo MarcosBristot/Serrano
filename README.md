@@ -74,3 +74,65 @@ Suas mensagens de commit devem ser claras, curtas e seguir o padrão:
 4. Envie para o repositório remoto: `git push origin tipo/sua-tarefa`
 5. Abra um Pull Request (PR) no GitHub, referenciando o link do cartão no Trello.
 6. Aguarde a revisão (Code Review) e aprovação (Approve) de pelo menos 1 membro da equipe antes do Merge.
+ 
+### 4. Setup do projeto — uv
+
+Este projeto usa **[uv](https://docs.astral.sh/uv/)** para gerenciar o ambiente virtual e as dependências. Este guia explica como instalar e usar a ferramenta.
+
+## 1. Instalando o uv
+
+Escolha o comando de acordo com o seu sistema operacional:
+
+```bash
+# Linux / macOS
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Windows (PowerShell)
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+# Alternativa via pip (qualquer SO, se já tiver Python instalado)
+pip install uv
+```
+
+Verifique a instalação:
+
+```bash
+uv --version
+```
+
+## 2. Clonando e configurando o projeto
+
+```bash
+git clone https://github.com/MarcosBristot/SistemaCampero
+cd SistemaCampero
+
+# Cria o ambiente virtual e instala todas as dependências
+# (baseado no pyproject.toml + uv.lock)
+uv sync
+```
+
+O `uv sync` cria uma pasta `.venv/` local com o ambiente virtual e instala exatamente as versões travadas no `uv.lock`. Isso garante que todos no time usem as mesmas versões de bibliotecas.
+
+Para rodar qualquer comando/script dentro desse ambiente, use `uv run`:
+
+```bash
+uv run python meu_script.py
+```
+
+### Adicionando uma nova dependência
+
+```bash
+uv add nome-do-pacote          # dependência normal
+```
+
+Isso atualiza automaticamente o `pyproject.toml` e o `uv.lock`. **Sempre commite o `uv.lock`** junto com as mudanças, para manter o ambiente reprodutível para todo o time.
+
+## 3. Resumo rápido para quem está entrando no projeto agora
+
+```bash
+git clone https://github.com/MarcosBristot/SistemaCampero
+cd SistemaCampero
+uv sync
+```
+
+Pronto — ambiente configurado e pronto para rodar o projeto.
