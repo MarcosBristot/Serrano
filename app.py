@@ -1,6 +1,6 @@
-import streamlit as st
-import requests
 import pandas as pd
+import requests
+import streamlit as st
 
 # O endereço da vossa API que já está a correr
 API_URL = "http://127.0.0.1:8000/api/v1/process-telemetry"

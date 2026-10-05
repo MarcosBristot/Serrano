@@ -1,17 +1,16 @@
-from fastapi import FastAPI, UploadFile, File
-import pandas as pd
 import numpy as np
-from datetime import datetime
+import pandas as pd
+from fastapi import FastAPI, File, UploadFile
 
 # Importamos as lógicas que o Raul já fez (supondo que o arquivo original se chame testar_dados_trator.py)
 from src.testar_dados_trator import (
-    sanitizar_gps, 
-    converter_unidades, 
-    detectar_ociosidade, 
-    detectar_anomalia_combustivel, 
-    calcular_metricas_dia_talhao, 
+    DESVIO_ALERTA_HECTARE,
+    calcular_metricas_dia_talhao,
+    converter_unidades,
     detectar_alerta_hectare,
-    DESVIO_ALERTA_HECTARE
+    detectar_anomalia_combustivel,
+    detectar_ociosidade,
+    sanitizar_gps,
 )
 
 app = FastAPI(title="API Campero Sistemas", version="1.0.0")
