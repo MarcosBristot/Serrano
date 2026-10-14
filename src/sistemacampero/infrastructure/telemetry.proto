@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package johndeere;
+
+message TelemetryReading {
+  // Tags provisórias baseadas em dados de telemetria padrão.
+  // Os números das tags (1, 2, 3...) serão confirmados após o primeiro teste.
+  int64 timestamp = 1;
+  double latitude = 2;
+  double longitude = 3;
+  double speed_kmh = 4;
+  double fuel_rate_lph = 5;
+  double rpm = 6;
+}
