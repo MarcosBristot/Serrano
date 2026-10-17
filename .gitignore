@@ -216,3 +216,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Dados reais de clientes / saídas do pipeline (nunca versionar)
+data_work/
+out_*/
+*.jdl
+JD-Data/
+Trator*/
+*.parquet
