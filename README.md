@@ -136,3 +136,17 @@ uv sync
 ```
 
 Pronto — ambiente configurado e pronto para rodar o projeto.
+## Adapter John Deere Gen4 (pendrive do monitor)
+
+Lê a pasta `JD-Data/log/*.jdl` exportada do monitor Gen4 e gera métricas e alertas.
+Detalhes do formato e validações: [`docs/adr/0001-adapter-john-deere-gen4.md`](docs/adr/0001-adapter-john-deere-gen4.md).
+
+```bash
+uv sync
+uv run pytest
+uv run python -m sistemacampero.pipeline.cli ingest <pasta JD-Data/log> --workdir ./data_work
+uv run python -m sistemacampero.pipeline.cli analyze --workdir ./data_work   # reprocessável
+uv run uvicorn sistemacampero.api.app:app --reload                            # upload em partes + resultados
+```
+
+`data_work/` (bruto, limpo e resultados) **não é versionado**: contém dados reais de clientes.
