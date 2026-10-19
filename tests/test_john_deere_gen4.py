@@ -1,14 +1,12 @@
-import math
 from pathlib import Path
 
-import numpy as np
 import pytest
 
-from sistemacampero.adapters.john_deere_gen4 import JohnDeereGen4Adapter
-from sistemacampero.adapters.john_deere_gen4.jdl import JdlFormatError, read_jdl
-from sistemacampero.analytics.rules import RuleConfig, detect_counter_mismatch, detect_idle
-from sistemacampero.processing.clean import sanitize
-from sistemacampero.processing.metrics import compute_session_metrics
+from sistemacampero.domain.services.metrics import compute_session_metrics
+from sistemacampero.domain.services.rules import RuleConfig, detect_counter_mismatch, detect_idle
+from sistemacampero.domain.services.sanitization import sanitize
+from sistemacampero.infrastructure.parsers.john_deere_gen4 import JohnDeereGen4Adapter
+from sistemacampero.infrastructure.parsers.john_deere_gen4.jdl import JdlFormatError, read_jdl
 from tests.jdl_builder import build_jdl
 
 
@@ -37,7 +35,7 @@ def test_adapter_schema_e_unidades(work_file):
     assert df["speed_kmh"].median() == pytest.approx(8.0)
     assert df["fuel_rate_lph"].median() == pytest.approx(22.0)
     assert df["engine_rpm"].median() == pytest.approx(1800.0)
-    assert df["fuel_level_l"].isna().all()           # JD não informa nível de tanque
+    assert df["fuel_level_l"].isna().all()  # JD não informa nível de tanque
     assert df["engine_on"].all() and df["gps_valid"].mean() > 0.95
     assert sess.context.operation is None and sess.context.implement_name == "Plantadeira Teste"
 
@@ -46,8 +44,8 @@ def test_metricas_combustivel_area(work_file):
     sess = JohnDeereGen4Adapter().parse(work_file)
     clean, _ = sanitize(sess.samples)
     m = compute_session_metrics(sess, clean)
-    assert m.fuel_integral_l == pytest.approx(22.0 * 0.5, rel=0.03)      # 22 L/h x 30 min
-    assert m.work_distance_km == pytest.approx(4.0, rel=0.03)            # 8 km/h x 0,5 h
+    assert m.fuel_integral_l == pytest.approx(22.0 * 0.5, rel=0.03)  # 22 L/h x 30 min
+    assert m.work_distance_km == pytest.approx(4.0, rel=0.03)  # 8 km/h x 0,5 h
     assert m.worked_area_ha == pytest.approx(4.0 * 1000 * 4.95 / 1e4, rel=0.03)
     assert m.l_per_ha == pytest.approx(m.fuel_integral_l / m.worked_area_ha)
     assert m.idle_h == 0
