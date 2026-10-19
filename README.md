@@ -150,3 +150,22 @@ uv run uvicorn sistemacampero.api.app:app --reload                            # 
 ```
 
 `data_work/` (bruto, limpo e resultados) **não é versionado**: contém dados reais de clientes.
+
+## Pipeline de telemetria (adapter John Deere Gen4)
+
+Arquitetura em camadas (DDD) e decisões: [`docs/adr/0003`](docs/adr/0003-arquitetura-ddd-e-integracao-supabase.md);
+formato do `.jdl`: [`docs/adr/0001`](docs/adr/0001-adapter-john-deere-gen4.md).
+
+```bash
+uv sync
+cp .env.example .env                          # preencha (sem SUPABASE_*, roda 100% local)
+uv run pytest && uv run ruff check src tests
+uv run sistemacampero ingest  "<pasta JD-Data/log>"      # bruto -> limpo
+uv run sistemacampero analyze                            # métricas + alertas (reprocessável)
+uv run sistemacampero import-boundaries "<pasta Gen4>"   # talhões -> Supabase (use --dry-run antes)
+uv run sistemacampero publish                            # envia ao Supabase o que falta
+uv run sistemacampero serve                              # API em http://127.0.0.1:8000/docs
+```
+
+Banco: aplique `supabase/migrations/*.sql` (leia o cabeçalho: há limpezas recomendadas).
+**Rotacione a chave `service_role`** exposta no histórico: `docs/seguranca-rotacao-de-chave.md`.
