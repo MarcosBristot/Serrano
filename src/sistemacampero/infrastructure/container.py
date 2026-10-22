@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass
 
 from sistemacampero.application.cadastro import ServicoCadastro
 from sistemacampero.application.ingestao import ExecutorDeJobs, ServicoIngestao
+from sistemacampero.application.kpis import ServicoKpis
 from sistemacampero.application.processamento import ProcessadorDeArquivo
 from sistemacampero.application.tenancy import ServicoTenancy
 from sistemacampero.domain.ports import Armazenamento, VerificadorDeProntidao, VerificadorDeToken
@@ -19,6 +20,7 @@ from sistemacampero.infrastructure.persistence.ingestao import (
     PostgresFilaDeJobs,
     PostgresRepositorioIngestao,
 )
+from sistemacampero.infrastructure.persistence.kpis import PostgresConsultasKpi, somas
 from sistemacampero.infrastructure.persistence.organizacoes import (
     PostgresRepositorioOrganizacoes,
 )
@@ -60,6 +62,8 @@ class Container:
     executor: ExecutorDeJobs | None = None
     cadastro: PostgresRepositorioCadastro | None = None
     servico_cadastro: ServicoCadastro | None = None
+    consultas_kpi: PostgresConsultasKpi | None = None
+    kpis: ServicoKpis | None = None
     db: Database | None = None
 
     def fechar(self) -> None:
@@ -98,6 +102,7 @@ def construir(settings: Settings, storage: Armazenamento | None = None) -> Conta
     )
     repo_ingestao = PostgresRepositorioIngestao(db)
     cadastro = PostgresRepositorioCadastro(db)
+    consultas = PostgresConsultasKpi(db)
     regras = ConfigRegras()
     executor = ExecutorDeJobs(
         repo=repo_ingestao,
@@ -120,5 +125,7 @@ def construir(settings: Settings, storage: Armazenamento | None = None) -> Conta
         executor=executor,
         cadastro=cadastro,
         servico_cadastro=ServicoCadastro(cadastro, repo_ingestao),
+        consultas_kpi=consultas,
+        kpis=ServicoKpis(consultas, somas, regras.versao),
         db=db,
     )

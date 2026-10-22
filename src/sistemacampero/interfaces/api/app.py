@@ -18,7 +18,7 @@ from sistemacampero.infrastructure.container import Container, construir
 from sistemacampero.infrastructure.logging_config import configurar_logs
 from sistemacampero.interfaces.api import errors
 from sistemacampero.interfaces.api.middleware import Metricas, RequestContextMiddleware
-from sistemacampero.interfaces.api.routers import cadastro, conta, ingestao, saude
+from sistemacampero.interfaces.api.routers import cadastro, conta, ingestao, kpis, saude
 
 PREFIXO = "/api/v1"
 
@@ -67,4 +67,6 @@ def create_app(
     app.include_router(ingestao.admin, prefix=PREFIXO)
     app.include_router(cadastro.router, prefix=PREFIXO)
     app.include_router(cadastro.sessoes, prefix=PREFIXO)
+    app.include_router(kpis.router, prefix=PREFIXO)
+    app.include_router(kpis.legado, prefix=PREFIXO)
     return app

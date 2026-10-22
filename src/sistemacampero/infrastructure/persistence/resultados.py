@@ -25,6 +25,7 @@ from psycopg.types.json import Jsonb
 from sistemacampero.application.processamento import ResultadoSessao
 from sistemacampero.domain.ingestao import StatusArquivo
 from sistemacampero.infrastructure.persistence.db import Conexao, Database
+from sistemacampero.infrastructure.persistence.kpis import recalcular_diarias
 
 COLUNAS_TELEMETRIA = (
     "ts",
@@ -129,6 +130,9 @@ class PostgresRepositorioResultados:
                 conn, organizacao_id, sessao_id, versao_regras, config_regras
             )
             self._metricas(conn, organizacao_id, sessao_id, versao_regras, execucao_id, r)
+            recalcular_diarias(
+                conn, organizacao_id, maquina_id, meta.inicio, meta.fim, versao_regras
+            )
             self._alertas(
                 conn,
                 organizacao_id,

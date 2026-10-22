@@ -4,7 +4,7 @@
 > agrícolas de diferentes fabricantes (pendrive do monitor) em métricas e alertas acionáveis.
 > Operação inicial: Passo Fundo e região (RS).
 
-Estado: **M4** do plano do backend v1. Decisões em
+Estado: **M5** do plano do backend v1. Decisões em
 [`docs/adr/0004`](docs/adr/0004-backend-v1-fundacao.md) (fundação),
 [`docs/adr/0005`](docs/adr/0005-formato-jdl-ancoras-e-gps.md) (formato `.jdl` e defeitos corrigidos) e
 [`docs/adr/0006`](docs/adr/0006-ingestao-assincrona.md) (ingestão assíncrona) e
@@ -16,7 +16,7 @@ Estado: **M4** do plano do backend v1. Decisões em
 | M2 Parser + universal + sanitização | adapter JD Gen4 (âncoras, trilha GPS 5 Hz), registro e contrato de adapters, sanitização, métricas, qualidade, regras, 3 defeitos corrigidos, linha de base de 2026 | ✅ |
 | M3 Ingestão assíncrona | Storage (local + Supabase), fila durável com lease/reaper/backoff/dead-letter, worker, upload/lote/zip seguro, dedupe, cancelamento, limite do plano | ✅ |
 | M4 Cadastro + geo | CRUD, importação Gen4 (MasterData + contornos), contorno por desenho/GeoJSON, localização por GPS, correção manual, relocalização, área por cobertura | ✅ |
-| M5 Métricas + KPIs | resumo, séries, ranking, safras, trajeto, mapa de calor, R$/ha | próximo |
+| M5 Métricas + KPIs | métricas diárias (dia local, talhão por ponto), resumo, séries (hora/dia/semana/mês), ranking, safras, trajeto GeoJSON, mapa de calor de L/ha, preço do diesel e R$/ha, rotas legadas `/telemetry/*` | ✅ |
 | M6–M9 | alertas, equipe, exportação, operação | — |
 
 ## Estrutura
@@ -90,6 +90,10 @@ Organização ativa: header `X-Organizacao-Id` (opcional se o usuário tiver uma
 | `PUT /api/v1/talhoes/{id}/contorno` · `PUT .../contorno/arquivo` · `DELETE .../contorno` | contorno desenhado ou `.gjson`; reprocessa as sessões afetadas |
 | `GET /api/v1/maquinas` · `PATCH /api/v1/maquinas/{id}` | apelido, ativar/desativar (respeita o plano) |
 | `GET /api/v1/sessions` · `GET /api/v1/sessions/{id}` · `PATCH /api/v1/sessions/{id}` | sessões; talhão manual e operador |
+| `GET /api/v1/kpis/resumo` · `/kpis/series?granularidade=` · `/kpis/ranking?por=` · `/kpis/safras?comparar=` | KPIs (filtros: `inicio`, `fim`, `maquina_id`, `talhao_id`, `operacao`) |
+| `GET /api/v1/mapas/calor` · `GET /api/v1/sessions/{id}/track` | mapa de calor de L/ha e trajeto (GeoJSON) |
+| `GET/POST/PATCH /api/v1/precos-combustivel` | preço do diesel por período (padrão: ANP RS, S10 R$ 6,59/L) |
+| `GET /api/v1/telemetry/machine/{serial}` · `GET /api/v1/telemetry/stats/{serial}` | contrato legado do frontend |
 | `GET /api/v1/admin/jobs?status=morto` · `POST /api/v1/admin/jobs/{id}/reenfileirar` · `POST /api/v1/admin/reabrir-bloqueados` | operação (só owner) |
 
 Erros seguem RFC 9457 (`application/problem+json`) com `code` estável, por exemplo

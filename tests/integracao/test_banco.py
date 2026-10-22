@@ -271,10 +271,10 @@ def test_area_do_talhao_por_trigger(admin: Conn, duas_orgs: dict) -> None:
 
 
 def test_preco_combustivel_sem_sobreposicao(admin: Conn, duas_orgs: dict) -> None:
-    org = duas_orgs["org_a"]
+    org = duas_orgs["org_a"]  # S500: o S10 já vem semeado com o preço padrão
     sql_ins = (
         "insert into public.preco_combustivel (organizacao_id, tipo, preco_rs_l, valido_de,"
-        " valido_ate, fonte) values (%s, 'S10', %s, %s, %s, 'anp')"
+        " valido_ate, fonte) values (%s, 'S500', %s, %s, %s, 'anp')"
     )
     admin.execute(sql_ins, (org, 6.59, "2026-08-01", "2026-09-01"))
     admin.execute(sql_ins, (org, 6.49, "2026-09-01", None))  # encosta, não sobrepõe
@@ -330,3 +330,12 @@ def test_particao_de_telemetria(db_backend: Database, admin: Conn, duas_orgs: di
         "select count(*) as n from public.telemetria where sessao_id = %s", (sessao,)
     ).fetchone()
     assert n == {"n": 0}
+
+
+def test_organizacao_nasce_com_preco_padrao(admin: Conn, duas_orgs: dict) -> None:
+    linha = admin.execute(
+        "select tipo, preco_rs_l::float as preco, fonte, valido_ate from public.preco_combustivel"
+        " where organizacao_id = %s",
+        (duas_orgs["org_a"],),
+    ).fetchall()
+    assert linha == [{"tipo": "S10", "preco": 6.59, "fonte": "anp", "valido_ate": None}]

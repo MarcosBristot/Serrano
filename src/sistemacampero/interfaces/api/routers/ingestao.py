@@ -28,6 +28,9 @@ class UploadOut(BaseModel):
     status: str
     sha256: str
     tipo: str
+    arquivo: str  # contrato antigo
+    marca: str | None
+    tecnologia: str | None
 
 
 class LoteOut(BaseModel):
@@ -105,12 +108,18 @@ def _cursor(valor: str | None) -> tuple[str, UUID] | None:
 def upload(
     c: ContainerDep,
     ctx: OperarDep,
-    arquivo: Annotated[UploadFile, File(description=".jdl ou .zip da pasta do monitor")],
+    arquivo: Annotated[
+        UploadFile | None, File(description=".jdl ou .zip da pasta do monitor")
+    ] = None,
+    file: Annotated[UploadFile | None, File(description="nome antigo do campo")] = None,
     marca: Annotated[str | None, Query(examples=["john_deere"])] = None,
     tecnologia: Annotated[str | None, Query(examples=["gen4"])] = None,
     lote_id: UUID | None = None,
 ) -> UploadOut:
     assert c.ingestao is not None
+    enviado = arquivo or file
+    if enviado is None:
+        raise Invalido("Envie o arquivo no campo 'arquivo' (ou 'file').", codigo="SEM_ARQUIVO")
     if (
         lote_id is not None
         and c.repo_ingestao is not None
@@ -119,8 +128,8 @@ def upload(
         raise NaoEncontrado("Lote não encontrado.", codigo="LOTE_NAO_ENCONTRADO")
     r = c.ingestao.receber(
         ctx.organizacao_id,
-        arquivo.filename or "arquivo",
-        arquivo.file,
+        enviado.filename or "arquivo",
+        enviado.file,
         marca=marca,
         tecnologia=tecnologia,
         lote_id=lote_id,
@@ -132,6 +141,9 @@ def upload(
         status=r.status.value,
         sha256=r.sha256,
         tipo=r.tipo.value,
+        arquivo=enviado.filename or "arquivo",
+        marca=marca,
+        tecnologia=tecnologia,
     )
 
 
