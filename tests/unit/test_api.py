@@ -1,0 +1,163 @@
+from __future__ import annotations
+
+import uuid
+
+import pytest
+from fastapi import APIRouter
+from fastapi.testclient import TestClient
+
+from sistemacampero.domain.tenancy import Papel
+from sistemacampero.infrastructure.container import Container
+from sistemacampero.interfaces.api.app import create_app
+from tests.conftest import RepositorioEmMemoria, emitir_token
+
+
+@pytest.fixture
+def app(container: Container):  # type: ignore[no-untyped-def]
+    app = create_app(container)
+    boom = APIRouter()
+
+    @boom.get("/api/v1/_eco/{item_id}")
+    def _eco(item_id: str) -> dict[str, str]:
+        return {"item_id": item_id}
+
+    @boom.get("/api/v1/_boom")
+    def _boom() -> None:
+        raise RuntimeError("falha simulada")
+
+    app.include_router(boom)
+    return app
+
+
+@pytest.fixture
+def client(app) -> TestClient:  # type: ignore[no-untyped-def]
+    return TestClient(app)
+
+
+def _auth(uid: uuid.UUID, **headers: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {emitir_token(uid)}", **headers}
+
+
+def _problema(resp, status: int, code: str) -> dict:  # type: ignore[no-untyped-def]
+    assert resp.status_code == status, resp.text
+    assert resp.headers["content-type"].startswith("application/problem+json")
+    corpo = resp.json()
+    assert corpo["status"] == status
+    assert corpo["code"] == code
+    assert corpo["request_id"] == resp.headers["x-request-id"]
+    return corpo  # type: ignore[no-any-return]
+
+
+def test_health_e_ready(client: TestClient, container: Container) -> None:
+    assert client.get("/health").json()["status"] == "ok"
+    assert client.get("/api/v1/health").status_code == 200
+    assert client.get("/ready").status_code == 200
+    container.prontidao.checks["banco"] = "erro: OperationalError"  # type: ignore[attr-defined]
+    resp = client.get("/ready")
+    assert resp.status_code == 503
+    assert resp.json()["checks"]["banco"].startswith("erro")
+
+
+def test_request_id_gerado_e_propagado(client: TestClient) -> None:
+    gerado = client.get("/health").headers["x-request-id"]
+    assert len(gerado) == 32
+    assert (
+        client.get("/health", headers={"X-Request-ID": "abc-12345678"}).headers["x-request-id"]
+        == "abc-12345678"
+    )
+    # Valor estranho (injeção em log) é trocado por um gerado.
+    assert client.get("/health", headers={"X-Request-ID": "x\ty"}).headers["x-request-id"] != "x\ty"
+
+
+def test_sem_token_401(client: TestClient) -> None:
+    resp = client.get("/api/v1/me")
+    _problema(resp, 401, "NAO_AUTENTICADO")
+    assert resp.headers["www-authenticate"] == "Bearer"
+    _problema(
+        client.get("/api/v1/me", headers={"Authorization": "Bearer lixo"}), 401, "NAO_AUTENTICADO"
+    )
+
+
+def test_me_lista_organizacoes(client: TestClient, repo: RepositorioEmMemoria) -> None:
+    uid = uuid.uuid4()
+    org = repo.adicionar("Agro Um", uid, Papel.GESTOR)
+    corpo = client.get("/api/v1/me", headers=_auth(uid)).json()
+    assert corpo["usuario_id"] == str(uid)
+    assert corpo["email"] == "gestor@example.com"
+    assert corpo["organizacoes"] == [
+        {"organizacao_id": str(org), "nome": "Agro Um", "slug": "agro-um", "papel": "gestor"}
+    ]
+
+
+def test_cria_organizacao(client: TestClient) -> None:
+    uid = uuid.uuid4()
+    resp = client.post("/api/v1/organizacoes", json={"nome": "Fazenda Serrano"}, headers=_auth(uid))
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["slug"] == "fazenda-serrano"
+    assert resp.json()["papel"] == "owner"
+    ativa = client.get("/api/v1/organizacao-ativa", headers=_auth(uid)).json()
+    assert ativa == {"organizacao_id": resp.json()["id"], "papel": "owner"}
+
+    _problema(
+        client.post("/api/v1/organizacoes", json={"nome": "Outra"}, headers=_auth(uid)),
+        409,
+        "JA_TEM_ORGANIZACAO",
+    )
+
+
+def test_validacao_vira_problem_json(client: TestClient) -> None:
+    corpo = _problema(
+        client.post("/api/v1/organizacoes", json={"nome": "x"}, headers=_auth(uuid.uuid4())),
+        422,
+        "VALIDACAO",
+    )
+    assert corpo["errors"][0]["loc"] == ["body", "nome"]
+
+
+def test_organizacao_ativa(client: TestClient, repo: RepositorioEmMemoria) -> None:
+    uid = uuid.uuid4()
+    _problema(client.get("/api/v1/organizacao-ativa", headers=_auth(uid)), 403, "SEM_ORGANIZACAO")
+    repo.adicionar("Agro Um", uid, Papel.OWNER)
+    org2 = repo.adicionar("Agro Dois", uid, Papel.LEITOR)
+    _problema(
+        client.get("/api/v1/organizacao-ativa", headers=_auth(uid)), 422, "ORGANIZACAO_AMBIGUA"
+    )
+    resp = client.get(
+        "/api/v1/organizacao-ativa", headers=_auth(uid, **{"X-Organizacao-Id": str(org2)})
+    )
+    assert resp.json()["papel"] == "leitor"
+    _problema(
+        client.get("/api/v1/organizacao-ativa", headers=_auth(uid, **{"X-Organizacao-Id": "123"})),
+        422,
+        "ORGANIZACAO_INVALIDA",
+    )
+    _problema(
+        client.get(
+            "/api/v1/organizacao-ativa",
+            headers=_auth(uid, **{"X-Organizacao-Id": str(uuid.uuid4())}),
+        ),
+        403,
+        "ORGANIZACAO_PROIBIDA",
+    )
+
+
+def test_404_e_500_em_problem_json(client: TestClient) -> None:
+    _problema(client.get("/api/v1/nao-existe"), 404, "NAO_ENCONTRADO")
+    corpo = _problema(client.get("/api/v1/_boom"), 500, "ERRO_INTERNO")
+    assert "falha simulada" not in corpo["detail"]
+
+
+def test_metrics_usa_template_da_rota(client: TestClient) -> None:
+    client.get("/health")
+    client.get("/api/v1/_eco/abc123")
+    client.get("/api/v1/nao-existe")
+    texto = client.get("/metrics").text
+    assert 'http_requests_total{method="GET",route="/health",status="200"}' in texto
+    assert 'route="/api/v1/_eco/{item_id}",status="200"' in texto
+    assert 'route="nao_roteada",status="404"' in texto
+    assert "abc123" not in texto
+
+
+def test_openapi_documenta_rotas(client: TestClient) -> None:
+    caminhos = client.get("/openapi.json").json()["paths"]
+    assert {"/api/v1/me", "/api/v1/organizacoes", "/health", "/ready"} <= set(caminhos)
