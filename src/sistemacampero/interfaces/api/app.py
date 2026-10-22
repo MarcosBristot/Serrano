@@ -23,6 +23,7 @@ from sistemacampero.interfaces.api.routers import (
     cadastro,
     conta,
     equipe,
+    exportacao,
     ingestao,
     kpis,
     saude,
@@ -83,4 +84,5 @@ def create_app(
     app.include_router(kpis.legado, prefix=PREFIXO)
     app.include_router(alertas.router, prefix=PREFIXO)
     app.include_router(equipe.router, prefix=PREFIXO)
+    app.include_router(exportacao.router, prefix=PREFIXO)
     return app

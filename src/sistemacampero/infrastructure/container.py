@@ -7,10 +7,12 @@ from dataclasses import asdict, dataclass
 from sistemacampero.application.alertas import ServicoAlertas, ServicoNotificacoes
 from sistemacampero.application.cadastro import ServicoCadastro
 from sistemacampero.application.equipe import ServicoEquipe
+from sistemacampero.application.exportacao import ServicoExportacao
 from sistemacampero.application.ingestao import ExecutorDeJobs, ServicoIngestao
 from sistemacampero.application.kpis import ServicoKpis
 from sistemacampero.application.processamento import ProcessadorDeArquivo
 from sistemacampero.application.tenancy import ServicoTenancy
+from sistemacampero.domain.ingestao import TipoJob
 from sistemacampero.domain.ports import Armazenamento, VerificadorDeProntidao, VerificadorDeToken
 from sistemacampero.domain.services.rules import ConfigRegras
 from sistemacampero.infrastructure.config import Settings
@@ -21,6 +23,7 @@ from sistemacampero.infrastructure.persistence.alertas import PostgresRepositori
 from sistemacampero.infrastructure.persistence.cadastro import PostgresRepositorioCadastro
 from sistemacampero.infrastructure.persistence.db import Database
 from sistemacampero.infrastructure.persistence.equipe import PostgresRepositorioEquipe
+from sistemacampero.infrastructure.persistence.exportacao import PostgresExportacoes
 from sistemacampero.infrastructure.persistence.ingestao import (
     PostgresFilaDeJobs,
     PostgresRepositorioIngestao,
@@ -76,6 +79,8 @@ class Container:
     cifra: Cifra | None = None
     repo_equipe: PostgresRepositorioEquipe | None = None
     equipe: ServicoEquipe | None = None
+    repo_exportacao: PostgresExportacoes | None = None
+    exportacao: ServicoExportacao | None = None
     db: Database | None = None
 
     def fechar(self) -> None:
@@ -117,6 +122,7 @@ def construir(settings: Settings, storage: Armazenamento | None = None) -> Conta
     consultas = PostgresConsultasKpi(db)
     repo_alertas = PostgresRepositorioAlertas(db)
     repo_equipe = PostgresRepositorioEquipe(db)
+    repo_exportacao = PostgresExportacoes(db)
     servico_alertas = ServicoAlertas(repo_alertas, repo_ingestao)
     cifra = Cifra(settings.chave_cifragem.get_secret_value() if settings.chave_cifragem else None)
     smtp = (
@@ -146,6 +152,8 @@ def construir(settings: Settings, storage: Armazenamento | None = None) -> Conta
         leitor_cadastro=ler_cadastro_gen4,
         alertas=servico_alertas,
     )
+    exportacao = ServicoExportacao(repo_exportacao, repo_ingestao, storage, regras.versao)
+    executor.registrar(TipoJob.EXPORTAR, exportacao.executar)
     return Container(
         settings=settings,
         tenancy=ServicoTenancy(PostgresRepositorioOrganizacoes(db)),
@@ -165,6 +173,8 @@ def construir(settings: Settings, storage: Armazenamento | None = None) -> Conta
         notificador=notificador,
         cifra=cifra,
         repo_equipe=repo_equipe,
+        repo_exportacao=repo_exportacao,
+        exportacao=exportacao,
         equipe=ServicoEquipe(repo_equipe, notificador.convite if smtp else None),
         db=db,
     )

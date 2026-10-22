@@ -147,6 +147,18 @@ class Worker:
         logger.info("worker encerrado")
 
 
+def _a_cada(segundos: float, tarefa: Callable[[], int]) -> Callable[[], int]:
+    proxima = [0.0]
+
+    def rodar() -> int:
+        if time.monotonic() < proxima[0]:
+            return 0
+        proxima[0] = time.monotonic() + segundos
+        return tarefa()
+
+    return rodar
+
+
 def main() -> int:
     from sistemacampero.infrastructure.config import Settings
     from sistemacampero.infrastructure.container import construir
@@ -163,7 +175,10 @@ def main() -> int:
         heartbeat_s=settings.worker_heartbeat_s,
         poll_min_s=settings.worker_poll_min_s,
         poll_max_s=settings.worker_poll_max_s,
-        periodicas=[c.notificacoes.enviar_pendentes] if c.notificacoes else [],
+        periodicas=[
+            *([c.notificacoes.enviar_pendentes] if c.notificacoes else []),
+            *([_a_cada(3600, c.exportacao.limpar_vencidas)] if c.exportacao else []),
+        ],
     )
     parar = threading.Event()
     for sinal in (signal.SIGINT, signal.SIGTERM):

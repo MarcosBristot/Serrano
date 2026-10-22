@@ -184,6 +184,11 @@ class ExecutorDeJobs:
             TipoJob.IMPORTAR_GEN4: self._importar_gen4,
         }
 
+    def registrar(
+        self, tipo: TipoJob, handler: Callable[[Job, ControleJob], dict[str, Any]]
+    ) -> None:
+        self._handlers[tipo] = handler
+
     def executar(self, job: Job, controle: ControleJob) -> dict[str, Any]:
         return self._handlers[job.tipo](job, controle)
 

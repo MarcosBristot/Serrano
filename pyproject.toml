@@ -24,6 +24,7 @@ dependencies = [
     "python-multipart>=0.0.9",
     "pyproj>=3.6",
     "email-validator>=2.1",
+    "xlsxwriter>=3.2",
 ]
 
 [dependency-groups]
@@ -58,6 +59,7 @@ select = ["E", "W", "F", "I", "N", "UP", "B", "SIM", "C4"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["E501"]
+"src/sistemacampero/infrastructure/persistence/*" = ["E501"]  # SQL legível > 100 colunas
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["fastapi.Depends", "fastapi.Header", "fastapi.Query"]
@@ -70,6 +72,10 @@ plugins = ["pydantic.mypy"]
 warn_unused_ignores = true
 warn_redundant_casts = true
 check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["xlsxwriter", "xlsxwriter.*"]
+ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["sistemacampero.domain.*", "sistemacampero.application.*"]

@@ -19,6 +19,7 @@ class TipoJob(StrEnum):
     EXPANDIR_ZIP = "expandir_zip"
     IMPORTAR_GEN4 = "importar_gen4"
     PROCESSAR_ARQUIVO = "processar_arquivo"
+    EXPORTAR = "exportar"
 
 
 # Menor = antes: zip -> cadastro do monitor (talhões) -> .jdl (já localiza por GPS).
@@ -26,6 +27,7 @@ PRIORIDADE: dict[TipoJob, int] = {
     TipoJob.EXPANDIR_ZIP: 50,
     TipoJob.IMPORTAR_GEN4: 60,
     TipoJob.PROCESSAR_ARQUIVO: 100,
+    TipoJob.EXPORTAR: 120,
 }
 
 
