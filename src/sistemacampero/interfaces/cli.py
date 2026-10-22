@@ -48,6 +48,12 @@ def _api(args: argparse.Namespace) -> int:
     return 0
 
 
+def _worker(_: argparse.Namespace) -> int:
+    from sistemacampero.interfaces.worker import main as worker_main
+
+    return worker_main()
+
+
 def main(argv: list[str] | None = None) -> int:
     configurar_logs(os.environ.get("LOG_LEVEL", "INFO"), json_=False)
     parser = argparse.ArgumentParser(prog="sistemacampero")
@@ -74,6 +80,8 @@ def main(argv: list[str] | None = None) -> int:
     api.add_argument("--port", type=int, default=int(os.environ.get("PORT", "8000")))
     api.add_argument("--reload", action="store_true")
     api.set_defaults(func=_api)
+
+    sub.add_parser("worker", help="processa a fila de jobs").set_defaults(func=_worker)
 
     args = parser.parse_args(argv)
     resultado: int = args.func(args)

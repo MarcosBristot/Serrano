@@ -21,6 +21,7 @@ dependencies = [
     "pandas>=2.2",
     "pyarrow>=17.0",
     "shapely>=2.0",
+    "python-multipart>=0.0.9",
 ]
 
 [dependency-groups]

@@ -31,7 +31,20 @@ def test_urls_derivadas_do_supabase() -> None:
 
 def test_cors_curinga_proibido_em_producao() -> None:
     with pytest.raises(ValidationError, match="CORS"):
-        _settings(supabase_url="https://abc.supabase.co", ambiente="prod", cors_origens=["*"])
+        _settings(
+            supabase_url="https://abc.supabase.co",
+            supabase_secret_key="sb_secret_x",
+            storage_backend="supabase",
+            ambiente="prod",
+            cors_origens=["*"],
+        )
+
+
+def test_producao_exige_storage_do_supabase() -> None:
+    with pytest.raises(ValidationError, match="Storage"):
+        _settings(supabase_url="https://abc.supabase.co", ambiente="prod")
+    with pytest.raises(ValidationError, match="SUPABASE_SECRET_KEY"):
+        _settings(supabase_url="https://abc.supabase.co", storage_backend="supabase")
 
 
 def test_segredo_nao_aparece_no_repr() -> None:

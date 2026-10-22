@@ -109,6 +109,7 @@ class Cenario:
     so_cabecalho: bool = False
     start_ms: int = START_MS
     plantio: bool = False
+    serial: str = "SINTETICO0001"
 
 
 def _bruto(canal: Canal, valor: float) -> int:
@@ -132,7 +133,7 @@ def construir(c: Cenario) -> bytes:
     grupos += f_bytes(7, f_varint(1, 101) + f_str(9, "HLC"))
     if c.plantio:
         grupos += f_bytes(7, f_varint(1, 102) + f_str(9, "Plantio"))
-    dev0 = f_str(4, "SINTETICO0001") + grupos
+    dev0 = f_str(4, c.serial) + grupos
     dev1 = f_str(5, "Plantadeira Teste") + (f_double(6, c.largura_m) if c.largura_m else b"")
     root = (
         f_varint(3, c.start_ms)

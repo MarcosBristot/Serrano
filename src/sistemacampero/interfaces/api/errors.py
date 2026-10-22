@@ -13,6 +13,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from sistemacampero.domain.errors import (
     Conflito,
     ErroDominio,
+    GrandeDemais,
     Invalido,
     NaoAutenticado,
     NaoEncontrado,
@@ -28,6 +29,7 @@ _STATUS: dict[type[ErroDominio], int] = {
     NaoEncontrado: 404,
     Conflito: 409,
     Invalido: 422,
+    GrandeDemais: 413,
 }
 
 

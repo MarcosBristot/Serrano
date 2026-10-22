@@ -40,3 +40,7 @@ class Conflito(ErroDominio):
 
 class Invalido(ErroDominio):
     codigo = "INVALIDO"
+
+
+class GrandeDemais(ErroDominio):
+    codigo = "ARQUIVO_GRANDE_DEMAIS"

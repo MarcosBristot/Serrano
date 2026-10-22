@@ -4,16 +4,18 @@
 > agrícolas de diferentes fabricantes (pendrive do monitor) em métricas e alertas acionáveis.
 > Operação inicial: Passo Fundo e região (RS).
 
-Estado: **M2** do plano do backend v1. Decisões em
-[`docs/adr/0004`](docs/adr/0004-backend-v1-fundacao.md) (fundação) e
-[`docs/adr/0005`](docs/adr/0005-formato-jdl-ancoras-e-gps.md) (formato `.jdl` e defeitos corrigidos).
+Estado: **M3** do plano do backend v1. Decisões em
+[`docs/adr/0004`](docs/adr/0004-backend-v1-fundacao.md) (fundação),
+[`docs/adr/0005`](docs/adr/0005-formato-jdl-ancoras-e-gps.md) (formato `.jdl` e defeitos corrigidos) e
+[`docs/adr/0006`](docs/adr/0006-ingestao-assincrona.md) (ingestão assíncrona).
 
 | Marco | Conteúdo | Status |
 |---|---|---|
 | M1 Fundação | DDD, config, API (problem+json, request id, métricas), auth JWT (JWKS/HS256), org ativa, schema completo + RLS + GRANTs, Docker, CI | ✅ |
 | M2 Parser + universal + sanitização | adapter JD Gen4 (âncoras, trilha GPS 5 Hz), registro e contrato de adapters, sanitização, métricas, qualidade, regras, 3 defeitos corrigidos, linha de base de 2026 | ✅ |
-| M3 Ingestão assíncrona | Storage, fila durável, worker, upload/lote/zip, dedupe, limite do plano | próximo |
-| M4–M9 | cadastro/geo, KPIs, alertas, equipe, exportação, operação | — |
+| M3 Ingestão assíncrona | Storage (local + Supabase), fila durável com lease/reaper/backoff/dead-letter, worker, upload/lote/zip seguro, dedupe, cancelamento, limite do plano | ✅ |
+| M4 Cadastro + geo | CRUD, importação Gen4/GeoJSON, localização de talhão, área por cobertura | próximo |
+| M5–M9 | KPIs, alertas, equipe, exportação, operação | — |
 
 ## Estrutura
 
@@ -38,7 +40,7 @@ Pré-requisitos: [uv](https://docs.astral.sh/uv/) e Docker.
 ```bash
 uv sync
 uv run pytest tests/unit                        # sem banco
-docker compose up --build                       # PostGIS + migrations + API em http://localhost:8000/docs
+docker compose up --build                       # PostGIS + migrations + API + worker (http://localhost:8000/docs)
 ```
 
 Testes de integração (com o `db` do compose de pé; cada execução cria e apaga um banco próprio):
@@ -78,9 +80,15 @@ Organização ativa: header `X-Organizacao-Id` (opcional se o usuário tiver uma
 | `GET /api/v1/me` | usuário e organizações |
 | `POST /api/v1/organizacoes` | cria a primeira organização (owner, plano básico em trial) |
 | `GET /api/v1/organizacao-ativa` | organização e papel que valem para a requisição |
+| `POST /api/v1/telemetry/upload?marca=&tecnologia=&lote_id=` | **um** `.jdl` ou `.zip` por chamada; 202 com `job_id`, `arquivo_id`, `duplicado` |
+| `POST /api/v1/batches` · `GET /api/v1/batches/{id}` | lote de uploads e status agregado |
+| `GET /api/v1/jobs/{id}` · `POST /api/v1/jobs/{id}/cancelar` | situação do processamento |
+| `GET /api/v1/arquivos?status=&limit=&cursor=` | arquivos recebidos (paginação por cursor) |
+| `GET /api/v1/admin/jobs?status=morto` · `POST /api/v1/admin/jobs/{id}/reenfileirar` · `POST /api/v1/admin/reabrir-bloqueados` | operação (só owner) |
 
 Erros seguem RFC 9457 (`application/problem+json`) com `code` estável, por exemplo
-`NAO_AUTENTICADO`, `TOKEN_EXPIRADO`, `SEM_ORGANIZACAO`, `ORGANIZACAO_AMBIGUA`, `SLUG_EM_USO`.
+`NAO_AUTENTICADO`, `TOKEN_EXPIRADO`, `SEM_ORGANIZACAO`, `ORGANIZACAO_AMBIGUA`, `SLUG_EM_USO`,
+`FORMATO_NAO_SUPORTADO`, `ARQUIVO_GRANDE_DEMAIS` (413), `PAPEL_SEM_PERMISSAO`.
 
 ## Segurança
 

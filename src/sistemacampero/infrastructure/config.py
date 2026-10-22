@@ -6,6 +6,7 @@ Segredos nunca têm valor padrão.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Literal
 
 from pydantic import AnyHttpUrl, Field, SecretStr, model_validator
@@ -36,6 +37,18 @@ class Settings(BaseSettings):
     jwt_audience: str = "authenticated"
     jwks_cache_s: int = Field(default=600, ge=30)
 
+    # Storage: "supabase" em staging/produção; "local" (disco) em dev/compose/testes.
+    storage_backend: Literal["local", "supabase"] = "local"
+    storage_dir: Path = Path("./data_storage")
+    supabase_secret_key: SecretStr | None = None  # sb_secret_... (ou service_role legada)
+    max_upload_mb: int = Field(default=1024, ge=1)
+
+    # Worker (fila Postgres)
+    worker_lease_s: int = Field(default=600, ge=30)
+    worker_heartbeat_s: int = Field(default=60, ge=5)
+    worker_poll_min_s: float = Field(default=1.0, gt=0)
+    worker_poll_max_s: float = Field(default=5.0, gt=0)
+
     cors_origens: list[str] = Field(default_factory=list)
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     log_json: bool = True
@@ -44,6 +57,12 @@ class Settings(BaseSettings):
     def _exige_auth(self) -> Settings:
         if self.supabase_url is None and self.supabase_jwt_secret is None:
             raise ValueError("Defina SUPABASE_URL (JWKS) ou SUPABASE_JWT_SECRET (HS256).")
+        if self.storage_backend == "supabase" and (
+            self.supabase_url is None or self.supabase_secret_key is None
+        ):
+            raise ValueError("STORAGE_BACKEND=supabase exige SUPABASE_URL e SUPABASE_SECRET_KEY.")
+        if self.ambiente in ("staging", "prod") and self.storage_backend == "local":
+            raise ValueError("Em staging/produção o Storage é o do Supabase (disco é efêmero).")
         if self.ambiente == "prod" and "*" in self.cors_origens:
             raise ValueError("CORS_ORIGENS='*' não é permitido em produção.")
         return self
