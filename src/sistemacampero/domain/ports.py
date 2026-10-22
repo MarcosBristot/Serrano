@@ -5,10 +5,39 @@ As portas de telemetria, Storage, fila e notificação entram nos marcos M2, M3 
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import BinaryIO, Protocol
 from uuid import UUID
 
+from sistemacampero.domain.telemetry import EmptyFile, ParseContext, ParsedSession
 from sistemacampero.domain.tenancy import Organizacao, Vinculo
+
+
+class TelemetryAdapter(Protocol):
+    """Lê o arquivo de um fabricante/tecnologia e devolve o schema universal.
+
+    Contrato completo em ``docs/como-adicionar-marca.md`` e ``tests/contrato``.
+    """
+
+    brand: str
+    technology: str
+    version: str
+
+    def can_parse(self, head: bytes, filename: str) -> bool:
+        """Decide pelos primeiros bytes e pelo nome (sem ler o arquivo inteiro)."""
+        ...
+
+    def parse(self, data: BinaryIO, ctx: ParseContext) -> ParsedSession | EmptyFile:
+        """Levanta ``ArquivoInvalido`` se o formato estiver corrompido."""
+        ...
+
+
+class RegistroDeAdapters(Protocol):
+    def escolher(self, head: bytes, ctx: ParseContext) -> TelemetryAdapter:
+        """Adapter da marca/tecnologia do contexto ou, sem elas, por detecção.
+
+        Levanta ``Invalido`` (``FORMATO_NAO_SUPORTADO``) se nenhum servir.
+        """
+        ...
 
 
 class RepositorioOrganizacoes(Protocol):

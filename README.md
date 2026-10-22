@@ -4,26 +4,31 @@
 > agrícolas de diferentes fabricantes (pendrive do monitor) em métricas e alertas acionáveis.
 > Operação inicial: Passo Fundo e região (RS).
 
-Estado: **M1 (Fundação)** do plano do backend v1. Decisões em
-[`docs/adr/0004-backend-v1-fundacao.md`](docs/adr/0004-backend-v1-fundacao.md).
+Estado: **M2** do plano do backend v1. Decisões em
+[`docs/adr/0004`](docs/adr/0004-backend-v1-fundacao.md) (fundação) e
+[`docs/adr/0005`](docs/adr/0005-formato-jdl-ancoras-e-gps.md) (formato `.jdl` e defeitos corrigidos).
 
 | Marco | Conteúdo | Status |
 |---|---|---|
 | M1 Fundação | DDD, config, API (problem+json, request id, métricas), auth JWT (JWKS/HS256), org ativa, schema completo + RLS + GRANTs, Docker, CI | ✅ |
-| M2 Parser + universal + sanitização | adapter JD Gen4, contrato de adapters, correção dos 3 defeitos conhecidos, regressão | próximo |
-| M3–M9 | ingestão assíncrona, cadastro/geo, KPIs, alertas, equipe, exportação, operação | — |
+| M2 Parser + universal + sanitização | adapter JD Gen4 (âncoras, trilha GPS 5 Hz), registro e contrato de adapters, sanitização, métricas, qualidade, regras, 3 defeitos corrigidos, linha de base de 2026 | ✅ |
+| M3 Ingestão assíncrona | Storage, fila durável, worker, upload/lote/zip, dedupe, limite do plano | próximo |
+| M4–M9 | cadastro/geo, KPIs, alertas, equipe, exportação, operação | — |
 
 ## Estrutura
 
 ```
 src/sistemacampero/
-  domain/          entidades, portas (Protocol), erros tipados — sem FastAPI/psycopg/os.environ
-  application/     casos de uso (tenancy; ingestion, analysis... nos próximos marcos)
-  infrastructure/  config (pydantic-settings), persistence (psycopg 3), security (JWT), container
+  domain/          entidades, schema universal, portas (Protocol), erros tipados
+    services/      sanitization, metrics, quality, rules, geo — sem FastAPI/psycopg/os.environ
+  application/     casos de uso (tenancy, processamento de arquivo)
+  infrastructure/  config, persistence (psycopg 3), security (JWT), parsers/ (adapters), container
   interfaces/      api/ (FastAPI), cli.py
 supabase/migrations/   schema versionado (fonte da verdade)
 db/bootstrap_supabase_local.sql   só dev/teste: o que o Supabase já traz pronto
-tests/unit/        sem I/O       tests/integracao/   PostGIS real, como cada papel
+tests/unit/  sem I/O · tests/contrato/  todo adapter · tests/regressao/  defeitos do M0
+tests/sinteticos/  gerador de .jdl · tests/integracao/  PostGIS real, como cada papel
+scripts/regressao_dump.py   regressão com o dump real (fora do Git) x linha de base congelada
 ```
 
 ## Rodando local
@@ -47,8 +52,16 @@ uv run pytest
 Qualidade (o CI roda o mesmo):
 
 ```bash
-uv run ruff format --check src tests && uv run ruff check src tests && uv run mypy
+uv run ruff format --check src tests scripts && uv run ruff check src tests scripts && uv run mypy
 ```
+
+Regressão com um dump real de pendrive (a pasta não vai para o Git):
+
+```bash
+uv run python scripts/regressao_dump.py "<pasta JD-Data/log>"
+```
+
+Nova marca: [`docs/como-adicionar-marca.md`](docs/como-adicionar-marca.md).
 
 Rodar a API fora do Docker: copie `.env.example` para `.env`, preencha e
 `uv run sistemacampero api --reload`. Migrations num banco qualquer:
