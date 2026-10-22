@@ -161,3 +161,34 @@ def test_metrics_usa_template_da_rota(client: TestClient) -> None:
 def test_openapi_documenta_rotas(client: TestClient) -> None:
     caminhos = client.get("/openapi.json").json()["paths"]
     assert {"/api/v1/me", "/api/v1/organizacoes", "/health", "/ready"} <= set(caminhos)
+
+
+def test_cabecalhos_de_seguranca(client: TestClient) -> None:
+    r = client.get("/api/v1/health")
+    assert r.headers["x-content-type-options"] == "nosniff"
+    assert r.headers["x-frame-options"] == "DENY"
+    assert r.headers["cache-control"] == "no-store"
+    assert "strict-transport-security" not in r.headers  # só staging/prod
+
+
+def test_limite_de_requisicoes() -> None:
+    from sistemacampero.interfaces.api.protecao import Balde
+
+    b = Balde(por_minuto=3)
+    assert [b.consumir("x", agora=0.0) for _ in range(3)] == [0.0, 0.0, 0.0]
+    espera = b.consumir("x", agora=0.0)
+    assert espera == pytest.approx(20.0)  # 1 ficha a cada 20 s
+    assert b.consumir("outro", agora=0.0) == 0.0
+    assert b.consumir("x", agora=21.0) == 0.0
+
+
+def test_429_em_problem_json(container: Container) -> None:
+    from dataclasses import replace
+
+    c = replace(container, settings=container.settings.model_copy(update={"limite_por_minuto": 10}))
+    cli = TestClient(create_app(c))
+    respostas = [cli.get("/api/v1/me").status_code for _ in range(12)]
+    assert respostas.count(429) == 2
+    r = cli.get("/api/v1/me")
+    assert r.json()["code"] == "LIMITE_DE_REQUISICOES" and int(r.headers["retry-after"]) >= 1
+    assert cli.get("/health").status_code == 200  # healthcheck não é limitado

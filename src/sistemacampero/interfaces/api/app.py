@@ -18,6 +18,7 @@ from sistemacampero.infrastructure.container import Container, construir
 from sistemacampero.infrastructure.logging_config import configurar_logs
 from sistemacampero.interfaces.api import errors
 from sistemacampero.interfaces.api.middleware import Metricas, RequestContextMiddleware
+from sistemacampero.interfaces.api.protecao import ProtecaoMiddleware
 from sistemacampero.interfaces.api.routers import (
     alertas,
     cadastro,
@@ -58,6 +59,12 @@ def create_app(
     app.state.metricas = Metricas()
 
     errors.registrar(app)
+    app.add_middleware(
+        ProtecaoMiddleware,
+        por_minuto=cfg.limite_por_minuto,
+        uploads_por_minuto=cfg.limite_uploads_por_minuto,
+        hsts=cfg.ambiente in ("staging", "prod"),
+    )
     if cfg.cors_origens:
         app.add_middleware(
             CORSMiddleware,

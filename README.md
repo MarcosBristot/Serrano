@@ -4,7 +4,8 @@
 > agrícolas de diferentes fabricantes (pendrive do monitor) em métricas e alertas acionáveis.
 > Operação inicial: Passo Fundo e região (RS).
 
-Estado: **M5** do plano do backend v1. Decisões em
+Estado: **primeira versão completa (M1–M9)** do plano do backend v1. Deploy: [`docs/deploy.md`](docs/deploy.md) ·
+operação: [`docs/runbook.md`](docs/runbook.md) · piloto: [`docs/checklist-piloto.md`](docs/checklist-piloto.md). Decisões em
 [`docs/adr/0004`](docs/adr/0004-backend-v1-fundacao.md) (fundação),
 [`docs/adr/0005`](docs/adr/0005-formato-jdl-ancoras-e-gps.md) (formato `.jdl` e defeitos corrigidos) e
 [`docs/adr/0006`](docs/adr/0006-ingestao-assincrona.md) (ingestão assíncrona) e
@@ -17,7 +18,10 @@ Estado: **M5** do plano do backend v1. Decisões em
 | M3 Ingestão assíncrona | Storage (local + Supabase), fila durável com lease/reaper/backoff/dead-letter, worker, upload/lote/zip seguro, dedupe, cancelamento, limite do plano | ✅ |
 | M4 Cadastro + geo | CRUD, importação Gen4 (MasterData + contornos), contorno por desenho/GeoJSON, localização por GPS, correção manual, relocalização, área por cobertura | ✅ |
 | M5 Métricas + KPIs | métricas diárias (dia local, talhão por ponto), resumo, séries (hora/dia/semana/mês), ranking, safras, trajeto GeoJSON, mapa de calor de L/ha, preço do diesel e R$/ha, rotas legadas `/telemetry/*` | ✅ |
-| M6–M9 | alertas, equipe, exportação, operação | — |
+| M6 Regras + alertas | ciclo de vida, comentários, limiares por organização, linhas de base (vazão, L/ha), reanálise, notificações (webhook HMAC, e-mail) com outbox | ✅ |
+| M7 Equipe | convites, papéis, chaves de API, auditoria automática | ✅ |
+| M8 Exportação + qualidade | CSV em streaming (Excel pt-BR), CSV/XLSX assíncrono com link, relatório de qualidade explicado | ✅ |
+| M9 Operação | rate limit, cabeçalhos de segurança, deploy (Supabase + Railway + CI de migrations), runbook, checklist do piloto | ✅ |
 
 ## Estrutura
 
@@ -94,6 +98,11 @@ Organização ativa: header `X-Organizacao-Id` (opcional se o usuário tiver uma
 | `GET /api/v1/mapas/calor` · `GET /api/v1/sessions/{id}/track` | mapa de calor de L/ha e trajeto (GeoJSON) |
 | `GET/POST/PATCH /api/v1/precos-combustivel` | preço do diesel por período (padrão: ANP RS, S10 R$ 6,59/L) |
 | `GET /api/v1/telemetry/machine/{serial}` · `GET /api/v1/telemetry/stats/{serial}` | contrato legado do frontend |
+| `GET /api/v1/alerts` · `GET /alerts/{id}` · `POST /alerts/{id}/reconhecer\|resolver\|reabrir` · `POST /alerts/{id}/comentarios` | alertas |
+| `GET/PUT /api/v1/config/regras` · `POST /api/v1/analysis/run` | limiares e reanálise |
+| `GET/POST/PATCH/DELETE /api/v1/destinos-notificacao` · `POST .../{id}/teste` | e-mail/webhook |
+| `GET /api/v1/membros` · `POST /convites` · `POST /convites/{token}/aceitar` · `/chaves-api` · `/auditoria` | equipe |
+| `GET /api/v1/exportacoes/csv` · `POST /exportacoes` · `GET /exportacoes/{id}` · `GET /qualidade/relatorio` | exportação e qualidade |
 | `GET /api/v1/admin/jobs?status=morto` · `POST /api/v1/admin/jobs/{id}/reenfileirar` · `POST /api/v1/admin/reabrir-bloqueados` | operação (só owner) |
 
 Erros seguem RFC 9457 (`application/problem+json`) com `code` estável, por exemplo
