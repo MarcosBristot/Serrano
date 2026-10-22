@@ -26,7 +26,7 @@ class PostgresRepositorioOrganizacoes:
             ).fetchall()
         return [
             Vinculo(
-                organizacao_id=linha["organizacao_id"],  # type: ignore[arg-type]
+                organizacao_id=linha["organizacao_id"],
                 organizacao_nome=str(linha["nome"]),
                 organizacao_slug=str(linha["slug"]),
                 papel=Papel(str(linha["papel"])),

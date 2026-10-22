@@ -4,18 +4,20 @@
 > agrícolas de diferentes fabricantes (pendrive do monitor) em métricas e alertas acionáveis.
 > Operação inicial: Passo Fundo e região (RS).
 
-Estado: **M3** do plano do backend v1. Decisões em
+Estado: **M4** do plano do backend v1. Decisões em
 [`docs/adr/0004`](docs/adr/0004-backend-v1-fundacao.md) (fundação),
 [`docs/adr/0005`](docs/adr/0005-formato-jdl-ancoras-e-gps.md) (formato `.jdl` e defeitos corrigidos) e
-[`docs/adr/0006`](docs/adr/0006-ingestao-assincrona.md) (ingestão assíncrona).
+[`docs/adr/0006`](docs/adr/0006-ingestao-assincrona.md) (ingestão assíncrona) e
+[`docs/adr/0007`](docs/adr/0007-cadastro-geo-e-cobertura.md) (cadastro, localização e cobertura).
 
 | Marco | Conteúdo | Status |
 |---|---|---|
 | M1 Fundação | DDD, config, API (problem+json, request id, métricas), auth JWT (JWKS/HS256), org ativa, schema completo + RLS + GRANTs, Docker, CI | ✅ |
 | M2 Parser + universal + sanitização | adapter JD Gen4 (âncoras, trilha GPS 5 Hz), registro e contrato de adapters, sanitização, métricas, qualidade, regras, 3 defeitos corrigidos, linha de base de 2026 | ✅ |
 | M3 Ingestão assíncrona | Storage (local + Supabase), fila durável com lease/reaper/backoff/dead-letter, worker, upload/lote/zip seguro, dedupe, cancelamento, limite do plano | ✅ |
-| M4 Cadastro + geo | CRUD, importação Gen4/GeoJSON, localização de talhão, área por cobertura | próximo |
-| M5–M9 | KPIs, alertas, equipe, exportação, operação | — |
+| M4 Cadastro + geo | CRUD, importação Gen4 (MasterData + contornos), contorno por desenho/GeoJSON, localização por GPS, correção manual, relocalização, área por cobertura | ✅ |
+| M5 Métricas + KPIs | resumo, séries, ranking, safras, trajeto, mapa de calor, R$/ha | próximo |
+| M6–M9 | alertas, equipe, exportação, operação | — |
 
 ## Estrutura
 
@@ -84,11 +86,16 @@ Organização ativa: header `X-Organizacao-Id` (opcional se o usuário tiver uma
 | `POST /api/v1/batches` · `GET /api/v1/batches/{id}` | lote de uploads e status agregado |
 | `GET /api/v1/jobs/{id}` · `POST /api/v1/jobs/{id}/cancelar` | situação do processamento |
 | `GET /api/v1/arquivos?status=&limit=&cursor=` | arquivos recebidos (paginação por cursor) |
+| `GET/POST/PATCH/DELETE /api/v1/fazendas`, `/talhoes`, `/implementos`, `/operadores` | cadastro (talhão com GeoJSON) |
+| `PUT /api/v1/talhoes/{id}/contorno` · `PUT .../contorno/arquivo` · `DELETE .../contorno` | contorno desenhado ou `.gjson`; reprocessa as sessões afetadas |
+| `GET /api/v1/maquinas` · `PATCH /api/v1/maquinas/{id}` | apelido, ativar/desativar (respeita o plano) |
+| `GET /api/v1/sessions` · `GET /api/v1/sessions/{id}` · `PATCH /api/v1/sessions/{id}` | sessões; talhão manual e operador |
 | `GET /api/v1/admin/jobs?status=morto` · `POST /api/v1/admin/jobs/{id}/reenfileirar` · `POST /api/v1/admin/reabrir-bloqueados` | operação (só owner) |
 
 Erros seguem RFC 9457 (`application/problem+json`) com `code` estável, por exemplo
 `NAO_AUTENTICADO`, `TOKEN_EXPIRADO`, `SEM_ORGANIZACAO`, `ORGANIZACAO_AMBIGUA`, `SLUG_EM_USO`,
-`FORMATO_NAO_SUPORTADO`, `ARQUIVO_GRANDE_DEMAIS` (413), `PAPEL_SEM_PERMISSAO`.
+`FORMATO_NAO_SUPORTADO`, `ARQUIVO_GRANDE_DEMAIS` (413), `PAPEL_SEM_PERMISSAO`,
+`GEOMETRIA_INVALIDA`, `PLANO_LIMITE_MAQUINAS` (409), `REFERENCIA_INEXISTENTE`.
 
 ## Segurança
 

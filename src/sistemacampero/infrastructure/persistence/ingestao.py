@@ -60,7 +60,7 @@ class PostgresRepositorioIngestao:
             (organizacao_id, lote_id, tipo.value, Jsonb(payload), PRIORIDADE[tipo], chave),
         ).fetchone()
         assert linha is not None
-        job_id: UUID = linha["id"]  # type: ignore[assignment]
+        job_id: UUID = linha["id"]
         return job_id
 
     def registrar_arquivo(
@@ -98,12 +98,12 @@ class PostgresRepositorioIngestao:
                 ).fetchone()
                 assert existente is not None
                 return ArquivoRegistrado(
-                    arquivo_id=existente["id"],  # type: ignore[arg-type]
-                    job_id=existente["job_id"],  # type: ignore[arg-type]
+                    arquivo_id=existente["id"],
+                    job_id=existente["job_id"],
                     duplicado=True,
                     status=StatusArquivo(str(existente["status"])),
                 )
-            arquivo_id: UUID = linha["id"]  # type: ignore[assignment]
+            arquivo_id: UUID = linha["id"]
             job_id = None
             if enfileirar is not None:
                 job_id = self._enfileirar(
@@ -124,7 +124,7 @@ class PostgresRepositorioIngestao:
                 (organizacao_id, usuario_id, origem),
             ).fetchone()
         assert linha is not None
-        lote: UUID = linha["id"]  # type: ignore[assignment]
+        lote: UUID = linha["id"]
         return lote
 
     def obter_lote(self, organizacao_id: UUID, lote_id: UUID) -> dict[str, Any] | None:
@@ -197,7 +197,7 @@ class PostgresRepositorioIngestao:
                     organizacao_id,
                     TipoJob.PROCESSAR_ARQUIVO,
                     {"arquivo_id": str(linha["id"])},
-                    linha["lote_id"],  # type: ignore[arg-type]
+                    linha["lote_id"],
                     None,
                 )
         return len(ids)
@@ -225,13 +225,13 @@ class PostgresFilaDeJobs:
         if linha is None:
             return None
         return Job(
-            id=linha["id"],  # type: ignore[arg-type]
-            organizacao_id=linha["organizacao_id"],  # type: ignore[arg-type]
+            id=linha["id"],
+            organizacao_id=linha["organizacao_id"],
             tipo=TipoJob(str(linha["tipo"])),
-            payload=dict(linha["payload"]),  # type: ignore[call-overload]
-            tentativas=int(linha["tentativas"]),  # type: ignore[call-overload]
-            max_tentativas=int(linha["max_tentativas"]),  # type: ignore[call-overload]
-            lote_id=linha["lote_id"],  # type: ignore[arg-type]
+            payload=dict(linha["payload"]),
+            tentativas=int(linha["tentativas"]),
+            max_tentativas=int(linha["max_tentativas"]),
+            lote_id=linha["lote_id"],
         )
 
     def renovar(self, job_id: UUID, worker_id: str, lease_s: int) -> bool:
@@ -277,8 +277,8 @@ class PostgresFilaDeJobs:
             ).fetchone()
             if linha is None:
                 return "lease_perdido"
-            tentativas = int(linha["tentativas"])  # type: ignore[call-overload]
-            esgotou = definitivo or tentativas >= int(linha["max_tentativas"])  # type: ignore[call-overload]
+            tentativas = int(linha["tentativas"])
+            esgotou = definitivo or tentativas >= int(linha["max_tentativas"])
             status = StatusJob.MORTO if esgotou else StatusJob.PENDENTE
             conn.execute(
                 "update interno.jobs set status = %s, erro = %s, locked_by = null,"
@@ -316,20 +316,20 @@ class PostgresFilaDeJobs:
             ).fetchone()
         if linha is None:
             return None
-        payload: dict[str, Any] = linha["payload"]  # type: ignore[assignment]
+        payload: dict[str, Any] = linha["payload"]
         arquivo = payload.get("arquivo_id")
         return SituacaoJob(
-            id=linha["id"],  # type: ignore[arg-type]
+            id=linha["id"],
             tipo=str(linha["tipo"]),
             status=str(linha["status"]),
-            tentativas=int(linha["tentativas"]),  # type: ignore[call-overload]
-            max_tentativas=int(linha["max_tentativas"]),  # type: ignore[call-overload]
-            progresso=dict(linha["progresso"]),  # type: ignore[call-overload]
-            erro=linha["erro"],  # type: ignore[arg-type]
+            tentativas=int(linha["tentativas"]),
+            max_tentativas=int(linha["max_tentativas"]),
+            progresso=dict(linha["progresso"]),
+            erro=linha["erro"],
             arquivo_id=UUID(arquivo) if arquivo else None,
-            lote_id=linha["lote_id"],  # type: ignore[arg-type]
-            criado_em=linha["criado_em"],  # type: ignore[arg-type]
-            atualizado_em=linha["atualizado_em"],  # type: ignore[arg-type]
+            lote_id=linha["lote_id"],
+            criado_em=linha["criado_em"],
+            atualizado_em=linha["atualizado_em"],
         )
 
     def solicitar_cancelamento(self, organizacao_id: UUID, job_id: UUID) -> str | None:

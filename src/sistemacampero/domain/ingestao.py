@@ -17,11 +17,16 @@ BUCKET_EXPORTACOES = "exportacoes"
 
 class TipoJob(StrEnum):
     EXPANDIR_ZIP = "expandir_zip"
+    IMPORTAR_GEN4 = "importar_gen4"
     PROCESSAR_ARQUIVO = "processar_arquivo"
 
 
-# Menor = antes. O zip é expandido antes dos .jdl; o importador Gen4 (M4) fica entre eles.
-PRIORIDADE: dict[TipoJob, int] = {TipoJob.EXPANDIR_ZIP: 50, TipoJob.PROCESSAR_ARQUIVO: 100}
+# Menor = antes: zip -> cadastro do monitor (talhões) -> .jdl (já localiza por GPS).
+PRIORIDADE: dict[TipoJob, int] = {
+    TipoJob.EXPANDIR_ZIP: 50,
+    TipoJob.IMPORTAR_GEN4: 60,
+    TipoJob.PROCESSAR_ARQUIVO: 100,
+}
 
 
 class StatusJob(StrEnum):

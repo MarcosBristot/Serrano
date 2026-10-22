@@ -9,6 +9,9 @@ from __future__ import annotations
 from typing import Any, BinaryIO, Protocol
 from uuid import UUID
 
+from shapely.geometry import MultiPolygon
+
+from sistemacampero.domain.cadastro import ImportacaoCadastro, OrigemContorno, ResumoImportacao
 from sistemacampero.domain.ingestao import (
     ArquivoRegistrado,
     Job,
@@ -16,6 +19,7 @@ from sistemacampero.domain.ingestao import (
     StatusArquivo,
     TipoJob,
 )
+from sistemacampero.domain.services.geo import Contorno
 from sistemacampero.domain.telemetry import EmptyFile, ParseContext, ParsedSession
 from sistemacampero.domain.tenancy import Organizacao, Vinculo
 
@@ -114,6 +118,17 @@ class RepositorioIngestao(Protocol):
         self, organizacao_id: UUID, arquivo_id: UUID, status: StatusArquivo, motivo: str | None
     ) -> None: ...
 
+    def enfileirar(
+        self,
+        organizacao_id: UUID,
+        tipo: TipoJob,
+        payload: dict[str, Any],
+        lote_id: UUID | None = None,
+        chave: str | None = None,
+    ) -> UUID: ...
+
+    def reabrir_bloqueados(self, organizacao_id: UUID) -> int: ...
+
 
 class FilaDeJobs(Protocol):
     def reivindicar(self, worker_id: str, lease_s: int) -> Job | None:
@@ -139,3 +154,23 @@ class FilaDeJobs(Protocol):
     def recolher_vencidos(self) -> int:
         """Reaper: devolve à fila os jobs cujo lease venceu (worker morreu)."""
         ...
+
+
+class RepositorioCadastro(Protocol):
+    def contornos(self, org: UUID) -> list[Contorno]: ...
+
+    def talhao_manual(self, org: UUID, arquivo_id: UUID) -> UUID | None: ...
+
+    def importar(self, org: UUID, imp: ImportacaoCadastro) -> ResumoImportacao: ...
+
+    def arquivos_para_relocalizar(
+        self, org: UUID, contorno: MultiPolygon | None = None, talhao_id: UUID | None = None
+    ) -> list[UUID]: ...
+
+    def definir_contorno(
+        self, org: UUID, talhao_id: UUID, geom: MultiPolygon | None, origem: OrigemContorno | None
+    ) -> dict[str, Any]: ...
+
+    def corrigir_sessao(self, org: UUID, sessao_id: UUID, campos: dict[str, Any]) -> UUID: ...
+
+    def ativar_maquina(self, org: UUID, maquina_id: UUID, ativa: bool) -> dict[str, Any]: ...

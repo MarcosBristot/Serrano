@@ -22,6 +22,13 @@ from psycopg.rows import dict_row
 
 from sistemacampero.infrastructure.persistence import migrations
 from sistemacampero.infrastructure.persistence.db import Database
+from tests.integracao.apoio import (  # noqa: F401 - fixtures compartilhadas
+    client,
+    container,
+    criar_usuario,
+    org,
+    worker,
+)
 
 pytestmark = pytest.mark.integracao
 
@@ -67,12 +74,6 @@ def db_backend(bancos: dict[str, str]) -> Iterator[Database]:
     db.pool.wait(timeout=10)
     yield db
     db.fechar()
-
-
-def criar_usuario(admin: psycopg.Connection[Any]) -> uuid.UUID:
-    uid = uuid.uuid4()
-    admin.execute("insert into auth.users (id, email) values (%s, %s)", (uid, f"{uid}@teste.dev"))
-    return uid
 
 
 @contextmanager

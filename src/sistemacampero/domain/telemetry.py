@@ -61,6 +61,14 @@ def no_schema_universal(df: pd.DataFrame) -> pd.DataFrame:
     return out.astype(COLUNAS_UNIVERSAIS).reset_index(drop=True)
 
 
+def normalizar_guid(guid: str | None) -> str | None:
+    """'{AAB549AD-...}' -> 'aab549ad-...' (o .jdl e o MasterData.xml escrevem diferente)."""
+    if not guid:
+        return None
+    limpo = guid.strip().strip("{}").strip().lower()
+    return limpo or None
+
+
 class ArquivoInvalido(Invalido):
     """O arquivo não está no formato que o adapter declara ler."""
 

@@ -2,114 +2,34 @@
 
 from __future__ import annotations
 
-import io
 import threading
 import uuid
-import zipfile
-from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-import psycopg
 import pytest
 from fastapi.testclient import TestClient
 
 from sistemacampero.domain.ingestao import Job, TipoJob
-from sistemacampero.domain.tenancy import Organizacao
-from sistemacampero.infrastructure.config import Settings
-from sistemacampero.infrastructure.container import Container, construir
-from sistemacampero.infrastructure.persistence.organizacoes import (
-    PostgresRepositorioOrganizacoes,
-)
+from sistemacampero.infrastructure.container import Container
 from sistemacampero.infrastructure.storage.local import ArmazenamentoLocal
-from sistemacampero.interfaces.api.app import create_app
 from sistemacampero.interfaces.worker import Worker
-from tests.conftest import SEGREDO, emitir_token
-from tests.integracao.conftest import criar_usuario
+from tests.conftest import emitir_token
+from tests.integracao.apoio import Conn, criar_usuario, drenar, um, upload, zipar
 from tests.sinteticos.jdl_builder import Cenario
 from tests.sinteticos.jdl_builder import construir as construir_jdl
 
 pytestmark = pytest.mark.integracao
-
-Conn = psycopg.Connection[dict[str, Any]]
-
-
-@pytest.fixture(scope="module")
-def container(
-    bancos: dict[str, str], tmp_path_factory: pytest.TempPathFactory
-) -> Iterator[Container]:
-    settings = Settings(  # type: ignore[call-arg]
-        _env_file=None,
-        ambiente="test",
-        database_url=bancos["backend"],
-        supabase_url="https://projeto-teste.supabase.co",
-        supabase_jwt_secret=SEGREDO,
-        storage_dir=tmp_path_factory.mktemp("storage"),
-        db_pool_max=6,
-    )
-    c = construir(settings, storage=ArmazenamentoLocal(settings.storage_dir))
-    assert c.db is not None
-    c.db.pool.wait(timeout=10)
-    yield c
-    c.fechar()
-
-
-@pytest.fixture(scope="module")
-def client(container: Container) -> TestClient:
-    return TestClient(create_app(container))
-
-
-@pytest.fixture
-def worker(container: Container) -> Worker:
-    assert container.fila is not None and container.executor is not None
-    w = Worker(container.fila, container.executor, lease_s=60, heartbeat_s=5, reaper_s=0)
-    _drenar(w, 500)  # sobras de testes anteriores não entram nas contagens
-    return w
-
-
-@pytest.fixture
-def org(admin: Conn, container: Container) -> dict[str, Any]:
-    """Organização nova por teste (isolamento) com dono e token."""
-    assert container.db is not None
-    uid = criar_usuario(admin)
-    o = Organizacao(id=uuid.uuid4(), nome="Org Teste", slug=f"org-{uuid.uuid4().hex[:10]}")
-    PostgresRepositorioOrganizacoes(container.db).criar_organizacao(o, uid, "basico", 30)
-    return {"id": o.id, "user": uid, "auth": {"Authorization": f"Bearer {emitir_token(uid)}"}}
-
-
-def _drenar(worker: Worker, maximo: int = 50) -> int:
-    n = 0
-    while n < maximo and worker.rodar_uma_vez():
-        n += 1
-    return n
-
-
-def _upload(
-    client: TestClient, org: dict[str, Any], dados: bytes, nome: str = "s.jdl", **params: str
-) -> dict[str, Any]:
-    resp = client.post(
-        "/api/v1/telemetry/upload",
-        params={"marca": "john_deere", "tecnologia": "gen4", **params},
-        files={"arquivo": (nome, dados, "application/octet-stream")},
-        headers=org["auth"],
-    )
-    assert resp.status_code == 202, resp.text
-    return resp.json()  # type: ignore[no-any-return]
-
-
-def _um(admin: Conn, sql: str, *params: Any) -> Any:
-    linha = admin.execute(sql, params).fetchone()
-    return None if linha is None else next(iter(linha.values()))
 
 
 # ------------------------------------------------------------------- fluxo feliz
 def test_upload_processa_e_grava_tudo(
     client: TestClient, worker: Worker, org: dict[str, Any], admin: Conn, container: Container
 ) -> None:
-    r = _upload(client, org, construir_jdl(Cenario(minutos=30, plantio=True)))
+    r = upload(client, org, construir_jdl(Cenario(minutos=30, plantio=True)))
     assert r["duplicado"] is False and r["status"] == "recebido" and r["job_id"]
 
-    assert _drenar(worker) == 1
+    assert drenar(worker) == 1
     job = client.get(f"/api/v1/jobs/{r['job_id']}", headers=org["auth"]).json()
     assert job["status"] == "concluido"
     assert job["progresso"]["resultado"]["status"] == "processado"
@@ -126,11 +46,11 @@ def test_upload_processa_e_grava_tudo(
     assert sessao and sessao["operacao"] == "plantio" and sessao["qualidade_score"] == 100
     assert sessao["talhao_origem"] == "monitor"  # talhão do cabeçalho do .jdl
     assert (
-        _um(admin, "select count(*) from public.telemetria where sessao_id = %s", sessao["id"])
+        um(admin, "select count(*) from public.telemetria where sessao_id = %s", sessao["id"])
         == sessao["n_amostras"]
     )
     assert (
-        _um(
+        um(
             admin,
             "select count(*) from public.telemetria where sessao_id = %s and geom is not null",
             sessao["id"],
@@ -143,10 +63,10 @@ def test_upload_processa_e_grava_tudo(
     assert m and m["litros_integral"] == pytest.approx(11.0, rel=0.01)
     assert m["area_estimada_ha"] == pytest.approx(1.98, rel=0.01)
     assert (
-        _um(admin, "select serial from public.maquinas where organizacao_id = %s", org["id"])
+        um(admin, "select serial from public.maquinas where organizacao_id = %s", org["id"])
         == "SINTETICO0001"
     )
-    assert _um(
+    assert um(
         admin,
         "select largura_m::float from public.implementos where organizacao_id = %s",
         org["id"],
@@ -161,11 +81,11 @@ def test_reenvio_e_duplicado_por_organizacao(
     client: TestClient, worker: Worker, org: dict[str, Any], admin: Conn
 ) -> None:
     dados = construir_jdl(Cenario(minutos=2))
-    a = _upload(client, org, dados)
-    b = _upload(client, org, dados, nome="outro_nome.jdl")
+    a = upload(client, org, dados)
+    b = upload(client, org, dados, nome="outro_nome.jdl")
     assert b["duplicado"] is True
     assert (b["arquivo_id"], b["job_id"]) == (a["arquivo_id"], a["job_id"])
-    assert _um(admin, "select count(*) from interno.jobs where organizacao_id = %s", org["id"]) == 1
+    assert um(admin, "select count(*) from interno.jobs where organizacao_id = %s", org["id"]) == 1
 
     # Outra organização com o mesmo arquivo não é "duplicado" (isolamento).
     uid = criar_usuario(admin)
@@ -176,7 +96,7 @@ def test_reenvio_e_duplicado_por_organizacao(
         headers=outra["auth"],
     )
     assert resp.status_code == 201
-    assert _upload(client, outra, dados)["duplicado"] is False
+    assert upload(client, outra, dados)["duplicado"] is False
     # ... e não enxerga o job da primeira.
     assert client.get(f"/api/v1/jobs/{a['job_id']}", headers=outra["auth"]).status_code == 404
 
@@ -191,9 +111,9 @@ def test_reprocessar_nao_duplica_e_preserva_alerta_reconhecido(
         rpm=lambda _t: 900,
         gps="nenhum",
     )
-    r = _upload(client, org, construir_jdl(parado))
-    _drenar(worker)
-    sessao = _um(
+    r = upload(client, org, construir_jdl(parado))
+    drenar(worker)
+    sessao = um(
         admin, "select id from public.sessoes_trabalho where arquivo_bruto_id = %s", r["arquivo_id"]
     )
     alertas = admin.execute(
@@ -204,25 +124,23 @@ def test_reprocessar_nao_duplica_e_preserva_alerta_reconhecido(
         "update public.alertas set status = 'reconhecido' where sessao_id = %s and tipo = 'ociosidade'",
         (sessao,),
     )
-    n_tel = _um(admin, "select count(*) from public.telemetria where sessao_id = %s", sessao)
+    n_tel = um(admin, "select count(*) from public.telemetria where sessao_id = %s", sessao)
 
     assert container.repo_ingestao is not None
     container.repo_ingestao.enfileirar(
         org["id"], TipoJob.PROCESSAR_ARQUIVO, {"arquivo_id": r["arquivo_id"]}
     )
-    assert _drenar(worker) == 1
+    assert drenar(worker) == 1
 
     assert (
-        _um(
+        um(
             admin,
             "select count(*) from public.sessoes_trabalho where arquivo_bruto_id = %s",
             r["arquivo_id"],
         )
         == 1
     )
-    assert (
-        _um(admin, "select count(*) from public.telemetria where sessao_id = %s", sessao) == n_tel
-    )
+    assert um(admin, "select count(*) from public.telemetria where sessao_id = %s", sessao) == n_tel
     depois = admin.execute(
         "select tipo, status from public.alertas where sessao_id = %s order by tipo", (sessao,)
     ).fetchall()
@@ -231,19 +149,11 @@ def test_reprocessar_nao_duplica_e_preserva_alerta_reconhecido(
         ("sem_gps", "aberto"),
     ]
     assert (
-        _um(admin, "select count(*) from public.metricas_sessao where sessao_id = %s", sessao) == 1
+        um(admin, "select count(*) from public.metricas_sessao where sessao_id = %s", sessao) == 1
     )
 
 
 # ------------------------------------------------------------------- zip
-def _zip(entradas: dict[str, bytes]) -> bytes:
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for nome, dados in entradas.items():
-            zf.writestr(nome, dados)
-    return buf.getvalue()
-
-
 def test_zip_do_pendrive(
     client: TestClient, worker: Worker, org: dict[str, Any], admin: Conn
 ) -> None:
@@ -252,7 +162,7 @@ def test_zip_do_pendrive(
         construir_jdl(Cenario(minutos=4, so_cabecalho=False, lat0=-28.2)),
     )
     vazio = construir_jdl(Cenario(minutos=1, so_cabecalho=True))
-    dados = _zip(
+    dados = zipar(
         {
             "Trator JD/JD-Data/log/Talhao/a.jdl": a,
             "Trator JD/JD-Data/log/Talhao/b.jdl": b,
@@ -263,8 +173,8 @@ def test_zip_do_pendrive(
         }
     )
     lote = client.post("/api/v1/batches", headers=org["auth"]).json()["lote_id"]
-    r = _upload(client, org, dados, nome="Trator JD.zip", lote_id=lote)
-    assert _drenar(worker) == 4  # zip + a + b + vazio
+    r = upload(client, org, dados, nome="Trator JD.zip", lote_id=lote)
+    assert drenar(worker) == 5  # zip + importar_gen4 + a + b + vazio
 
     filhos = admin.execute(
         "select nome_original, tipo, status, motivo from public.arquivos_brutos"
@@ -272,14 +182,14 @@ def test_zip_do_pendrive(
         (r["arquivo_id"],),
     ).fetchall()
     assert [(f["nome_original"], f["status"]) for f in filhos] == [
-        ("MasterData.xml", "recebido"),  # aguarda o importador Gen4 (M4)
+        ("MasterData.xml", "processado"),  # importado pelo job importar_gen4
         ("a.jdl", "processado"),
         ("b.jdl", "processado"),
         ("vazio.jdl", "vazio"),
     ]
     assert filhos[3]["motivo"].startswith("sem_blocos_de_dados")
     status = client.get(f"/api/v1/batches/{lote}", headers=org["auth"]).json()
-    assert status["arquivos"] == 5 and status["processados"] == 3 and status["vazios"] == 1
+    assert status["arquivos"] == 5 and status["processados"] == 4 and status["vazios"] == 1
     job_zip = client.get(f"/api/v1/jobs/{r['job_id']}", headers=org["auth"]).json()
     assert job_zip["progresso"]["resultado"] == {
         "status": "processado",
@@ -293,8 +203,8 @@ def test_zip_do_pendrive(
 def test_zip_slip_rejeitado(
     client: TestClient, worker: Worker, org: dict[str, Any], admin: Conn
 ) -> None:
-    r = _upload(client, org, _zip({"../../fora.jdl": b"\x0dx"}), nome="mal.zip")
-    _drenar(worker)
+    r = upload(client, org, zipar({"../../fora.jdl": b"\x0dx"}), nome="mal.zip")
+    drenar(worker)
     arq = admin.execute(
         "select status, motivo from public.arquivos_brutos where id = %s", (r["arquivo_id"],)
     ).fetchone()
@@ -320,14 +230,14 @@ def test_upload_recusa_formato_e_tamanho(client: TestClient, org: dict[str, Any]
 def test_corrompido_e_rejeitado_sem_retentativa(
     client: TestClient, worker: Worker, org: dict[str, Any], admin: Conn
 ) -> None:
-    r = _upload(client, org, construir_jdl(Cenario(minutos=2))[:-500])
-    _drenar(worker)
+    r = upload(client, org, construir_jdl(Cenario(minutos=2))[:-500])
+    drenar(worker)
     job = admin.execute(
         "select status, tentativas from interno.jobs where id = %s", (r["job_id"],)
     ).fetchone()
     assert job == {"status": "concluido", "tentativas": 1}
     assert (
-        _um(admin, "select status from public.arquivos_brutos where id = %s", r["arquivo_id"])
+        um(admin, "select status from public.arquivos_brutos where id = %s", r["arquivo_id"])
         == "rejeitado"
     )
 
@@ -340,15 +250,15 @@ def test_limite_de_maquinas_do_plano(
         "update public.assinaturas set max_maquinas_override = 1 where organizacao_id = %s",
         (org["id"],),
     )
-    _upload(client, org, construir_jdl(Cenario(minutos=2, serial="SERIAL-A")))
-    b = _upload(client, org, construir_jdl(Cenario(minutos=2, serial="SERIAL-B")))
-    _drenar(worker)
+    upload(client, org, construir_jdl(Cenario(minutos=2, serial="SERIAL-A")))
+    b = upload(client, org, construir_jdl(Cenario(minutos=2, serial="SERIAL-B")))
+    drenar(worker)
     arq = admin.execute(
         "select status, motivo from public.arquivos_brutos where id = %s", (b["arquivo_id"],)
     ).fetchone()
     assert arq == {"status": "bloqueado_plano", "motivo": "PLANO_LIMITE_MAQUINAS"}
     assert (
-        _um(admin, "select count(*) from public.maquinas where organizacao_id = %s", org["id"]) == 1
+        um(admin, "select count(*) from public.maquinas where organizacao_id = %s", org["id"]) == 1
     )
 
     admin.execute(
@@ -357,14 +267,14 @@ def test_limite_de_maquinas_do_plano(
     )
     resp = client.post("/api/v1/admin/reabrir-bloqueados", headers=org["auth"])
     assert resp.json() == {"reenfileirados": 1}
-    _drenar(worker)
+    drenar(worker)
     assert (
-        _um(admin, "select status from public.arquivos_brutos where id = %s", b["arquivo_id"])
+        um(admin, "select status from public.arquivos_brutos where id = %s", b["arquivo_id"])
         == "processado"
     )
 
 
-def test_leitor_nao_faz_upload(client: TestClient, org: dict[str, Any], admin: Conn) -> None:
+def test_leitor_nao_fazupload(client: TestClient, org: dict[str, Any], admin: Conn) -> None:
     uid = criar_usuario(admin)
     admin.execute(
         "insert into public.membros (organizacao_id, usuario_id, papel) values (%s, %s, 'leitor')",
@@ -428,7 +338,7 @@ def test_retentativa_com_backoff_e_dead_letter(
 
     admin.execute("update interno.jobs set proxima_tentativa = now() where id = %s", (job_id,))
     assert w.rodar_uma_vez()
-    assert _um(admin, "select status from interno.jobs where id = %s", job_id) == "morto"
+    assert um(admin, "select status from interno.jobs where id = %s", job_id) == "morto"
     assert falha.desistiu
 
     mortos = client.get(
@@ -441,7 +351,7 @@ def test_retentativa_com_backoff_e_dead_letter(
     )
     w.executor = _Falha(vezes=0)  # type: ignore[assignment]
     assert w.rodar_uma_vez()
-    assert _um(admin, "select status from interno.jobs where id = %s", job_id) == "concluido"
+    assert um(admin, "select status from interno.jobs where id = %s", job_id) == "concluido"
 
 
 def test_worker_morto_no_meio_do_job_e_retomado(
@@ -449,25 +359,25 @@ def test_worker_morto_no_meio_do_job_e_retomado(
 ) -> None:
     """kill -9 simulado: o job fica 'executando' com lease; vencido, outro worker retoma."""
     assert container.fila is not None
-    r = _upload(client, org, construir_jdl(Cenario(minutos=3)))
+    r = upload(client, org, construir_jdl(Cenario(minutos=3)))
     morto = container.fila.reivindicar("worker-que-morreu", lease_s=600)
     assert morto is not None and str(morto.id) == r["job_id"]
     container.fila.recolher_vencidos()  # lease ainda válido: o reaper não mexe
     assert (
-        _um(admin, "select locked_by from interno.jobs where id = %s", r["job_id"])
+        um(admin, "select locked_by from interno.jobs where id = %s", r["job_id"])
         == "worker-que-morreu"
     )
 
     admin.execute(
         "update interno.jobs set lease_ate = now() - interval '1 s' where id = %s", (r["job_id"],)
     )
-    assert _drenar(worker) == 1  # reaper devolve, worker processa
+    assert drenar(worker) == 1  # reaper devolve, worker processa
     j = admin.execute(
         "select status, tentativas, locked_by from interno.jobs where id = %s", (r["job_id"],)
     ).fetchone()
     assert j == {"status": "concluido", "tentativas": 2, "locked_by": None}
     assert (
-        _um(
+        um(
             admin,
             "select count(*) from public.sessoes_trabalho where arquivo_bruto_id = %s",
             r["arquivo_id"],
@@ -499,8 +409,8 @@ def test_cancelamento(
 
     w = Worker(container.fila, _PedeCancelamentoNoMeio(), reaper_s=0)  # type: ignore[arg-type]
     assert w.rodar_uma_vez()
-    assert _um(admin, "select status from interno.jobs where id = %s", executando) == "cancelado"
-    assert _um(admin, "select status from interno.jobs where id = %s", pendente) == "cancelado"
+    assert um(admin, "select status from interno.jobs where id = %s", executando) == "cancelado"
+    assert um(admin, "select status from interno.jobs where id = %s", pendente) == "cancelado"
 
 
 def test_skip_locked_nenhum_job_pego_duas_vezes(container: Container, org: dict[str, Any]) -> None:
@@ -528,7 +438,7 @@ def test_listagem_paginada_por_cursor(
     client: TestClient, worker: Worker, org: dict[str, Any]
 ) -> None:
     for i in range(5):
-        _upload(client, org, construir_jdl(Cenario(minutos=1, lat0=-28.0 - i / 100)))
+        upload(client, org, construir_jdl(Cenario(minutos=1, lat0=-28.0 - i / 100)))
     vistos, cursor = [], None
     while True:
         params: dict[str, Any] = {"limit": 2}

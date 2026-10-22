@@ -16,7 +16,9 @@ from dataclasses import dataclass
 from typing import Any, BinaryIO, Protocol, cast
 from uuid import UUID
 
+from sistemacampero.application.cadastro import ServicoCadastro
 from sistemacampero.application.processamento import ProcessadorDeArquivo, ResultadoSessao
+from sistemacampero.domain.cadastro import ImportacaoCadastro
 from sistemacampero.domain.errors import GrandeDemais, Invalido
 from sistemacampero.domain.ingestao import (
     BUCKET_BRUTOS,
@@ -32,8 +34,9 @@ from sistemacampero.domain.ingestao import (
     nome_para_exibicao,
     tipo_do_arquivo,
 )
-from sistemacampero.domain.ports import Armazenamento, RepositorioIngestao
+from sistemacampero.domain.ports import Armazenamento, RepositorioCadastro, RepositorioIngestao
 from sistemacampero.domain.services import zip_seguro
+from sistemacampero.domain.services.geo import LocalizadorDeTalhoes
 from sistemacampero.domain.telemetry import EmptyFile, ParseContext
 
 logger = logging.getLogger(__name__)
@@ -144,6 +147,9 @@ class ServicoIngestao:
         return ResultadoUpload(reg.arquivo_id, reg.job_id, reg.duplicado, reg.status, sha, tipo)
 
 
+LeitorCadastro = Callable[[bytes, dict[str, bytes]], ImportacaoCadastro]
+
+
 class ExecutorDeJobs:
     """Handlers idempotentes: reexecutar um job não duplica nada."""
 
@@ -155,9 +161,14 @@ class ExecutorDeJobs:
         resultados: RepositorioResultados,
         versao_regras: str,
         config_regras: dict[str, Any],
+        cadastro: RepositorioCadastro,
+        leitor_cadastro: LeitorCadastro,
         limites_zip: zip_seguro.LimitesZip | None = None,
     ) -> None:
         self._repo = repo
+        self._cadastro = cadastro
+        self._leitor_cadastro = leitor_cadastro
+        self._servico_cadastro = ServicoCadastro(cadastro, repo)
         self._storage = storage
         self._processador = processador
         self._resultados = resultados
@@ -167,6 +178,7 @@ class ExecutorDeJobs:
         self._handlers: dict[TipoJob, Callable[[Job, ControleJob], dict[str, Any]]] = {
             TipoJob.PROCESSAR_ARQUIVO: self._processar_arquivo,
             TipoJob.EXPANDIR_ZIP: self._expandir_zip,
+            TipoJob.IMPORTAR_GEN4: self._importar_gen4,
         }
 
     def executar(self, job: Job, controle: ControleJob) -> dict[str, Any]:
@@ -195,8 +207,11 @@ class ExecutorDeJobs:
             marca=arquivo.get("marca"),
             tecnologia=arquivo.get("tecnologia"),
         )
+        # Talhões da organização uma vez por job; o manual (correção do gestor) manda.
+        talhoes = LocalizadorDeTalhoes(self._cadastro.contornos(org))
+        manual = self._cadastro.talhao_manual(org, arquivo_id)
         try:
-            r = self._processador.processar(dados, ctx)
+            r = self._processador.processar(dados, ctx, talhoes=talhoes, talhao_manual_id=manual)
         except Invalido as exc:  # formato errado/corrompido: não adianta tentar de novo
             self._repo.marcar_arquivo(
                 org, arquivo_id, StatusArquivo.REJEITADO, f"{exc.codigo}: {exc.mensagem}"
@@ -236,6 +251,10 @@ class ExecutorDeJobs:
         self._repo.marcar_arquivo(org, zip_id, StatusArquivo.PROCESSANDO, None)
         lote_id = arquivo.get("lote_id") or job.lote_id
         contagem = {"jdl": 0, "masterdata": 0, "gjson": 0, "duplicados": 0}
+        masterdata: list[UUID] = []
+        # nome no zip -> arquivo (novo ou já existente): o .gjson repetido de outro pendrive
+        # tem como "pai" o primeiro zip, então a relação vai explícita no payload.
+        gjson: dict[str, str] = {}
         with tempfile.TemporaryFile() as arquivo_tmp:
             tmp = cast(BinaryIO, arquivo_tmp)
             self._storage.copiar_para(BUCKET_BRUTOS, str(arquivo["caminho_storage"]), tmp)
@@ -246,6 +265,10 @@ class ExecutorDeJobs:
                         controle.verificar()
                         controle.progresso({"entradas_lidas": i, **contagem})
                     reg = self._registrar_entrada(org, zip_id, lote_id, arquivo, entrada)
+                    if entrada.tipo is TipoArquivo.MASTERDATA:
+                        masterdata.append(reg.arquivo_id)
+                    elif entrada.tipo is TipoArquivo.GJSON:
+                        gjson[entrada.nome] = str(reg.arquivo_id)
                     contagem[entrada.tipo.value] += 1
                     contagem["duplicados"] += int(reg.duplicado)
             except Invalido as exc:
@@ -253,8 +276,63 @@ class ExecutorDeJobs:
                     org, zip_id, StatusArquivo.REJEITADO, f"{exc.codigo}: {exc.mensagem}"
                 )
                 return {"status": StatusArquivo.REJEITADO.value, "motivo": exc.codigo, **contagem}
+        # Cadastro do monitor antes dos .jdl (prioridade menor = antes na fila).
+        for md_id in masterdata:  # um por zip (chave = zip): pendrive novo reimporta
+            self._repo.enfileirar(
+                org,
+                TipoJob.IMPORTAR_GEN4,
+                {"arquivo_id": str(md_id), "gjson": gjson},
+                lote_id,
+                f"importar_gen4:{zip_id}:{md_id}",
+            )
         self._repo.marcar_arquivo(org, zip_id, StatusArquivo.PROCESSADO, None)
         return {"status": StatusArquivo.PROCESSADO.value, **contagem}
+
+    # ------------------------------------------------------------ cadastro Gen4
+    def _importar_gen4(self, job: Job, controle: ControleJob) -> dict[str, Any]:
+        org, md_id = job.organizacao_id, UUID(job.payload["arquivo_id"])
+        md = self._repo.obter_arquivo(org, md_id)
+        if md is None:
+            return {"status": "arquivo_inexistente"}
+        xml = self._storage.ler(BUCKET_BRUTOS, str(md["caminho_storage"]))
+        gjsons: list[tuple[str, dict[str, Any]]] = []
+        for nome, ident in job.payload.get("gjson", {}).items():
+            g = self._repo.obter_arquivo(org, UUID(ident))
+            if g is not None:
+                gjsons.append((nome, g))
+        por_nome = {
+            nome: self._storage.ler(BUCKET_BRUTOS, str(g["caminho_storage"])) for nome, g in gjsons
+        }
+        controle.verificar()
+        try:
+            cadastro = self._leitor_cadastro(xml, por_nome)
+        except Invalido as exc:
+            self._repo.marcar_arquivo(
+                org, md_id, StatusArquivo.REJEITADO, f"{exc.codigo}: {exc.mensagem}"
+            )
+            return {"status": StatusArquivo.REJEITADO.value, "motivo": exc.codigo}
+        resumo = self._cadastro.importar(org, cadastro)
+        relocalizadas = 0
+        if resumo.contornos_novos:
+            # Sessões já gravadas sem esses contornos; as pendentes já vão localizar.
+            relocalizadas = self._servico_cadastro.relocalizar(
+                org, self._cadastro.arquivos_para_relocalizar(org)
+            )
+        self._repo.marcar_arquivo(
+            org, md_id, StatusArquivo.PROCESSADO, "; ".join(cadastro.avisos)[:500] or None
+        )
+        for _, g in gjsons:
+            self._repo.marcar_arquivo(org, g["id"], StatusArquivo.PROCESSADO, None)
+        return {
+            "status": StatusArquivo.PROCESSADO.value,
+            "fazendas": resumo.fazendas,
+            "talhoes": resumo.talhoes,
+            "contornos_novos": resumo.contornos_novos,
+            "contornos_preservados": resumo.contornos_preservados,
+            "implementos": resumo.implementos,
+            "operadores": resumo.operadores,
+            "sessoes_relocalizadas": relocalizadas,
+        }
 
     def _registrar_entrada(
         self,

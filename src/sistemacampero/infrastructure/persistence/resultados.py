@@ -19,6 +19,7 @@ from uuid import UUID
 
 import numpy as np
 import pandas as pd
+import shapely
 from psycopg.types.json import Jsonb
 
 from sistemacampero.application.processamento import ResultadoSessao
@@ -101,22 +102,16 @@ class PostgresRepositorioResultados:
                 meta.fazenda_guid,
                 {"nome": meta.fazenda_nome, "cliente_nome": meta.cliente_nome},
             )
-            talhao_id = self._upsert_guid(
+            talhao_monitor_id = self._upsert_guid(
                 conn,
                 "talhoes",
                 organizacao_id,
                 meta.talhao_guid,
                 {"nome": meta.talhao_nome, "fazenda_id": fazenda_id},
             )
-            implemento_id = None
-            if meta.implemento_nome:
-                implemento_id = self._upsert_guid(
-                    conn,
-                    "implementos",
-                    organizacao_id,
-                    f"jdl:{meta.implemento_nome}",
-                    {"nome": meta.implemento_nome, "largura_m": meta.implemento_largura_m},
-                )
+            implemento_id = self._implemento(conn, organizacao_id, r)
+            # GPS (ou manual, que o SQL preserva) > talhão escolhido no monitor.
+            talhao_id = r.talhao_id or talhao_monitor_id
 
             sessao_id = self._sessao(
                 conn,
@@ -124,11 +119,12 @@ class PostgresRepositorioResultados:
                 arquivo_id,
                 maquina_id,
                 implemento_id,
-                talhao_id,
+                talhao_monitor_id,
                 caminho_limpo,
                 r,
             )
-            self._telemetria(conn, organizacao_id, maquina_id, sessao_id, r.limpo)
+            self._telemetria(conn, organizacao_id, maquina_id, sessao_id, r)
+            self._cobertura(conn, organizacao_id, sessao_id, versao_regras, r)
             execucao_id = self._execucao(
                 conn, organizacao_id, sessao_id, versao_regras, config_regras
             )
@@ -179,7 +175,7 @@ class PostgresRepositorioResultados:
                 "select count(*) as n from public.maquinas where ativa"
             ).fetchone()
             assert ativas is not None
-            if int(ativas["n"]) >= int(plano["limite"]):  # type: ignore[call-overload]
+            if int(ativas["n"]) >= int(plano["limite"]):
                 return None, PLANO_LIMITE
             existente = conn.execute(
                 "insert into public.maquinas (organizacao_id, serial, fabricante, tecnologia)"
@@ -213,6 +209,26 @@ class PostgresRepositorioResultados:
             valores,
         ).fetchone()
         return _uuid(linha)
+
+    def _implemento(self, conn: Conexao, org: UUID, r: ResultadoSessao) -> UUID | None:
+        """O do cadastro do monitor (mesmo nome) se existir; senão cria um pelo .jdl."""
+        meta = r.sessao.metadados
+        if not meta.implemento_nome:
+            return None
+        existente = conn.execute(
+            "select id from public.implementos where lower(nome) = lower(%s)"
+            " order by (external_guid like 'jdl:%%'), criado_em limit 1",
+            (meta.implemento_nome,),
+        ).fetchone()
+        if existente is not None:
+            return _uuid(existente)
+        return self._upsert_guid(
+            conn,
+            "implementos",
+            org,
+            f"jdl:{meta.implemento_nome}",
+            {"nome": meta.implemento_nome, "largura_m": meta.implemento_largura_m},
+        )
 
     @staticmethod
     def _sessao(
@@ -248,13 +264,20 @@ class PostgresRepositorioResultados:
                 "avisos": r.sessao.diagnostico.avisos,
             },
         }
-        # Talhão manual (correção do gestor) nunca é sobrescrito; GPS entra no M4.
+        loc = r.localizacao
+        if loc is not None and loc.talhao_id is not None:
+            talhao_id, origem, confianca = loc.talhao_id, "gps", loc.confianca
+        elif talhao_monitor_id is not None:
+            talhao_id, origem, confianca = talhao_monitor_id, "monitor", None
+        else:
+            talhao_id, origem, confianca = None, "nenhum", None
+        # Talhão manual (correção do gestor) nunca é sobrescrito.
         linha = conn.execute(
             "insert into public.sessoes_trabalho (organizacao_id, arquivo_bruto_id, maquina_id,"
             " implemento_id, talhao_id, talhao_origem, talhao_monitor_id, operacao, inicio, fim,"
             " n_amostras, adapter, adapter_versao, firmware, caminho_limpo, qualidade_score,"
-            " qualidade)"
-            " values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+            " qualidade, talhao_confianca)"
+            " values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
             " on conflict (arquivo_bruto_id) do update set"
             "  maquina_id = excluded.maquina_id, implemento_id = excluded.implemento_id,"
             "  talhao_monitor_id = excluded.talhao_monitor_id,"
@@ -262,6 +285,8 @@ class PostgresRepositorioResultados:
             "    then sessoes_trabalho.talhao_id else excluded.talhao_id end,"
             "  talhao_origem = case when sessoes_trabalho.talhao_origem = 'manual'"
             "    then 'manual' else excluded.talhao_origem end,"
+            "  talhao_confianca = case when sessoes_trabalho.talhao_origem = 'manual'"
+            "    then sessoes_trabalho.talhao_confianca else excluded.talhao_confianca end,"
             "  operacao = excluded.operacao, inicio = excluded.inicio, fim = excluded.fim,"
             "  n_amostras = excluded.n_amostras, adapter = excluded.adapter,"
             "  adapter_versao = excluded.adapter_versao, firmware = excluded.firmware,"
@@ -273,8 +298,8 @@ class PostgresRepositorioResultados:
                 arquivo_id,
                 maquina_id,
                 implemento_id,
-                talhao_monitor_id,
-                "monitor" if talhao_monitor_id else "nenhum",
+                talhao_id,
+                origem,
                 talhao_monitor_id,
                 meta.operacao,
                 meta.inicio,
@@ -286,6 +311,7 @@ class PostgresRepositorioResultados:
                 caminho_limpo,
                 q.score,
                 Jsonb(json.loads(json.dumps(qualidade, default=str))),
+                confianca,
             ),
         ).fetchone()
         sessao_id = _uuid(linha)
@@ -294,8 +320,9 @@ class PostgresRepositorioResultados:
 
     @staticmethod
     def _telemetria(
-        conn: Conexao, org: UUID, maquina_id: UUID, sessao_id: UUID, limpo: pd.DataFrame
+        conn: Conexao, org: UUID, maquina_id: UUID, sessao_id: UUID, r: ResultadoSessao
     ) -> None:
+        limpo = r.limpo
         conn.execute("delete from public.telemetria where sessao_id = %s", (sessao_id,))
         if limpo.empty:
             return
@@ -307,23 +334,44 @@ class PostgresRepositorioResultados:
             " ts timestamptz, lat double precision, lon double precision, gps_valid boolean,"
             " speed_kmh real, speed_alt_kmh real, engine_rpm real, engine_load_pct real,"
             " fuel_rate_lph real, fuel_total_l double precision, fuel_level_l real,"
-            " engine_hours double precision, engine_on boolean) on commit drop"
+            " engine_hours double precision, engine_on boolean, talhao_id uuid)"
+            " on commit drop"
         )
         df = limpo[list(COLUNAS_TELEMETRIA)].astype(object)
+        por_ponto = r.localizacao.por_ponto if r.localizacao else [None] * len(df)
+        df["talhao_id"] = pd.Series(por_ponto, index=df.index, dtype=object)
         df = df.where(pd.notna(df), None)
         with conn.cursor().copy(
-            f"copy _telemetria_carga ({', '.join(COLUNAS_TELEMETRIA)}) from stdin"
+            f"copy _telemetria_carga ({', '.join(COLUNAS_TELEMETRIA)}, talhao_id) from stdin"
         ) as copia:
             for linha in df.itertuples(index=False, name=None):
                 copia.write_row([_sem_nan(v) for v in linha])
         conn.execute(
             f"insert into public.telemetria (organizacao_id, maquina_id, sessao_id,"
-            f" {', '.join(COLUNAS_TELEMETRIA)})"
-            f" select %s, %s, %s, {', '.join(COLUNAS_TELEMETRIA)} from _telemetria_carga"
+            f" {', '.join(COLUNAS_TELEMETRIA)}, talhao_id)"
+            f" select %s, %s, %s, {', '.join(COLUNAS_TELEMETRIA)}, talhao_id"
+            " from _telemetria_carga"
             " on conflict (maquina_id, ts) do nothing",  # sessões sobrepostas da mesma máquina
             (org, maquina_id, sessao_id),
         )
         conn.execute("truncate _telemetria_carga")
+
+    @staticmethod
+    def _cobertura(
+        conn: Conexao, org: UUID, sessao_id: UUID, versao: str, r: ResultadoSessao
+    ) -> None:
+        conn.execute(
+            "delete from public.coberturas_sessao where sessao_id = %s and versao_regras = %s",
+            (sessao_id, versao),
+        )
+        if r.cobertura is None:
+            return
+        conn.execute(
+            "insert into public.coberturas_sessao (sessao_id, versao_regras, organizacao_id,"
+            " geometria) values (%s, %s, %s,"
+            " extensions.st_multi(extensions.st_geomfromwkb(%s, 4326)))",
+            (sessao_id, versao, org, shapely.to_wkb(r.cobertura.geometria)),
+        )
 
     @staticmethod
     def _execucao(

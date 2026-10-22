@@ -9,13 +9,14 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
+from typing import Any
 from uuid import UUID
 
 import psycopg
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
-Conexao = psycopg.Connection[dict[str, object]]
+Conexao = psycopg.Connection[dict[str, Any]]
 
 
 class Database:

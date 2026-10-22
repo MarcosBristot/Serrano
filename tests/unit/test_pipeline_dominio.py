@@ -28,7 +28,11 @@ def test_metricas_de_uma_sessao_de_plantio() -> None:
     assert m.litros_integral == pytest.approx(11.0, rel=0.01)  # 22 L/h x 0,5 h
     assert m.distancia_trabalho_km == pytest.approx(4.0, rel=0.01)  # 8 km/h x 0,5 h
     assert m.area_estimada_ha == pytest.approx(4.0 * 4.95 / 10, rel=0.01)
-    assert m.l_ha == pytest.approx(m.litros_integral / m.area_estimada_ha)
+    # Linha reta sem passadas repetidas: cobertura ~ estimada, sobreposição ~ 0.
+    assert m.area_metodo == "cobertura"
+    assert m.area_cobertura_ha == pytest.approx(m.area_estimada_ha, rel=0.01)
+    assert m.sobreposicao_pct == pytest.approx(0, abs=0.5)
+    assert m.l_ha == pytest.approx(m.litros_integral / m.area_cobertura_ha)
     assert m.ocioso_h == 0 and m.cobertura_gps == 1.0
     assert r.sessao.metadados.operacao == "plantio"
     assert r.qualidade.score == 100

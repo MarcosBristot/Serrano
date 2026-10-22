@@ -33,6 +33,8 @@ CAMPOS_METRICAS = (
     "litros_contador",
     "distancia_trabalho_km",
     "area_estimada_ha",
+    "area_cobertura_ha",
+    "sobreposicao_pct",
     "l_ha",
     "ha_h",
     "cobertura_gps",
@@ -112,6 +114,8 @@ def resumir(linhas: list[dict[str, Any]]) -> dict[str, Any]:
         "litros_integral": soma("litros_integral"),
         "litros_contador": soma("litros_contador"),
         "area_estimada_ha": soma("area_estimada_ha"),
+        "area_cobertura_ha": soma("area_cobertura_ha"),
+        "mediana_sobreposicao_pct": mediana("sobreposicao_pct"),
         "mediana_l_ha": mediana("l_ha"),
         "mediana_ha_h": mediana("ha_h"),
         "contador_sobre_integral": {

@@ -33,7 +33,9 @@ class MetricasSessao:
     distancia_trabalho_km: float
     velocidade_media: float | None
     area_estimada_ha: float | None  # distância x largura do implemento
-    area_metodo: str | None
+    area_cobertura_ha: float | None  # união das faixas trabalhadas (recortada pelo talhão)
+    sobreposicao_pct: float | None
+    area_metodo: str | None  # cobertura | estimada (a usada em ha/h e L/ha)
     ha_h: float | None
     l_ha: float | None
     cobertura_gps: float  # fração das amostras com motor ligado que têm posição
@@ -53,7 +55,13 @@ def _razao(a: float | None, b: float | None, minimo: float = HORAS_MINIMAS) -> f
     return a / b
 
 
-def calcular_metricas(limpo: pd.DataFrame, largura_m: float | None) -> MetricasSessao | None:
+def calcular_metricas(
+    limpo: pd.DataFrame,
+    largura_m: float | None,
+    area_cobertura_ha: float | None = None,
+    sobreposicao_pct: float | None = None,
+) -> MetricasSessao | None:
+    """Com cobertura (trilha GPS), ha/h e L/ha usam a área coberta; senão, a estimada."""
     if limpo.empty:
         return None
     ligado = limpo["engine_on"].astype(bool)
@@ -72,10 +80,12 @@ def calcular_metricas(limpo: pd.DataFrame, largura_m: float | None) -> MetricasS
     motor_h, trabalho_h, ocioso_h = horas(ligado), horas(andando), horas(parado)
     l_int, l_trab, l_ocio = litros(ligado), litros(andando), litros(parado)
     distancia = float(velocidade[andando].fillna(0).sum()) / 3600.0
-    area = distancia * largura_m / 10.0 if largura_m and distancia > 0 else None  # km*m/10 = ha
-    if area is not None and area < AREA_MINIMA_HA:
-        area = None
+    estimada = distancia * largura_m / 10.0 if largura_m and distancia > 0 else None  # ha
+    if estimada is not None and estimada < AREA_MINIMA_HA:
+        estimada = None
     base_gps = limpo["gps_valid"][ligado] if ligado.any() else limpo["gps_valid"]
+    area = area_cobertura_ha if area_cobertura_ha is not None else estimada
+    metodo = "cobertura" if area_cobertura_ha is not None else ("estimada" if estimada else None)
 
     return MetricasSessao(
         duracao_h=len(limpo) / 3600.0,
@@ -92,8 +102,10 @@ def calcular_metricas(limpo: pd.DataFrame, largura_m: float | None) -> MetricasS
         lph_ocioso=_razao(l_ocio, ocioso_h),
         distancia_trabalho_km=distancia,
         velocidade_media=_razao(distancia, trabalho_h),
-        area_estimada_ha=area,
-        area_metodo="estimada" if area is not None else None,
+        area_estimada_ha=estimada,
+        area_cobertura_ha=area_cobertura_ha,
+        sobreposicao_pct=sobreposicao_pct,
+        area_metodo=metodo,
         ha_h=_razao(area, trabalho_h),
         l_ha=_razao(l_int, area, AREA_MINIMA_HA),
         cobertura_gps=float(base_gps.mean()) if len(base_gps) else 0.0,

@@ -16,6 +16,7 @@ from sistemacampero.domain.telemetry import (
     ParseContext,
     ParsedSession,
     no_schema_universal,
+    normalizar_guid,
 )
 from sistemacampero.infrastructure.parsers.john_deere_gen4 import channels as ch
 from sistemacampero.infrastructure.parsers.john_deere_gen4.jdl import (
@@ -101,11 +102,11 @@ class JohnDeereGen4Adapter:
             serial_monitor=jdl.display_serial,
             firmware=jdl.software_version,
             cliente_nome=jdl.client_name,
-            cliente_guid=jdl.client_guid,
+            cliente_guid=normalizar_guid(jdl.client_guid),
             fazenda_nome=jdl.farm_name,
-            fazenda_guid=jdl.farm_guid,
+            fazenda_guid=normalizar_guid(jdl.farm_guid),
             talhao_nome=jdl.field_name,
-            talhao_guid=jdl.field_guid,
+            talhao_guid=normalizar_guid(jdl.field_guid),
             implemento_nome=impl.name if impl else None,
             implemento_largura_m=impl.width_m if impl else None,
             operacao="plantio" if "Plantio" in jdl.device_names else None,

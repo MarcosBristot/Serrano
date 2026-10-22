@@ -21,6 +21,7 @@ from sistemacampero.domain.services.metrics import MetricasSessao
 
 ESSENCIAIS = ("speed_kmh", "fuel_rate_lph", "engine_rpm", "engine_hours", "fuel_total_l")
 LACUNA_S = 60
+CONFIANCA_TALHAO_MIN = 0.8
 SESSAO_CURTA_S = 120  # fragmentos (no dump de 2026, mediana de 2 s) não têm todos os canais
 
 HORIMETRO_MIN_H = 0.25  # compara horímetro x motor só com 15 min ou mais de horímetro
@@ -102,6 +103,7 @@ def avaliar(
     metricas: MetricasSessao | None,
     relatorio_sanitizacao: dict[str, int],
     canais_ausentes: list[str],
+    confianca_talhao: float | None = None,
 ) -> Qualidade:
     problemas: list[Problema] = []
     if len(limpo) < SESSAO_CURTA_S:
@@ -165,6 +167,17 @@ def avaliar(
                     f"Só {100 * metricas.cobertura_gps:.0f}% do tempo de motor tem posição.",
                     penalidade=10,
                     valor=round(metricas.cobertura_gps, 3),
+                )
+            )
+        if confianca_talhao is not None and confianca_talhao < CONFIANCA_TALHAO_MIN:
+            problemas.append(
+                Problema(
+                    "VARIOS_TALHOES",
+                    "info",
+                    f"Só {100 * confianca_talhao:.0f}% do trabalho foi no talhão principal: a "
+                    "sessão passou por outros talhões ou por áreas sem contorno.",
+                    penalidade=0,  # não é defeito do dado, é informação para o gestor
+                    valor=confianca_talhao,
                 )
             )
         for checagem in (consistencia_horimetro(metricas), consistencia_contador(metricas)):

@@ -4,13 +4,16 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 
+from sistemacampero.application.cadastro import ServicoCadastro
 from sistemacampero.application.ingestao import ExecutorDeJobs, ServicoIngestao
 from sistemacampero.application.processamento import ProcessadorDeArquivo
 from sistemacampero.application.tenancy import ServicoTenancy
 from sistemacampero.domain.ports import Armazenamento, VerificadorDeProntidao, VerificadorDeToken
 from sistemacampero.domain.services.rules import ConfigRegras
 from sistemacampero.infrastructure.config import Settings
+from sistemacampero.infrastructure.parsers.john_deere_gen4.masterdata import ler_cadastro_gen4
 from sistemacampero.infrastructure.parsers.registry import registro_padrao
+from sistemacampero.infrastructure.persistence.cadastro import PostgresRepositorioCadastro
 from sistemacampero.infrastructure.persistence.db import Database
 from sistemacampero.infrastructure.persistence.ingestao import (
     PostgresFilaDeJobs,
@@ -55,6 +58,8 @@ class Container:
     repo_ingestao: PostgresRepositorioIngestao | None = None
     fila: PostgresFilaDeJobs | None = None
     executor: ExecutorDeJobs | None = None
+    cadastro: PostgresRepositorioCadastro | None = None
+    servico_cadastro: ServicoCadastro | None = None
     db: Database | None = None
 
     def fechar(self) -> None:
@@ -92,6 +97,7 @@ def construir(settings: Settings, storage: Armazenamento | None = None) -> Conta
         segredo_hs256=segredo.get_secret_value() if segredo else None,
     )
     repo_ingestao = PostgresRepositorioIngestao(db)
+    cadastro = PostgresRepositorioCadastro(db)
     regras = ConfigRegras()
     executor = ExecutorDeJobs(
         repo=repo_ingestao,
@@ -100,6 +106,8 @@ def construir(settings: Settings, storage: Armazenamento | None = None) -> Conta
         resultados=PostgresRepositorioResultados(db),
         versao_regras=regras.versao,
         config_regras=asdict(regras),
+        cadastro=cadastro,
+        leitor_cadastro=ler_cadastro_gen4,
     )
     return Container(
         settings=settings,
@@ -110,5 +118,7 @@ def construir(settings: Settings, storage: Armazenamento | None = None) -> Conta
         repo_ingestao=repo_ingestao,
         fila=PostgresFilaDeJobs(db),
         executor=executor,
+        cadastro=cadastro,
+        servico_cadastro=ServicoCadastro(cadastro, repo_ingestao),
         db=db,
     )
