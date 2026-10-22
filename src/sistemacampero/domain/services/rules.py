@@ -202,6 +202,50 @@ def gps_salto(chave: str, df: pd.DataFrame, cfg: ConfigRegras) -> list[Alerta]:
     return out
 
 
+@dataclass(frozen=True, slots=True)
+class LinhasBase:
+    """Medianas do histórico da mesma máquina + implemento + operação (None = histórico curto)."""
+
+    vazao_lph: float | None = None
+    l_ha: float | None = None
+    sessoes: int = 0
+
+
+def l_ha_acima(
+    chave: str,
+    l_ha: float | None,
+    base: LinhasBase,
+    cfg: ConfigRegras,
+    inicio: datetime,
+    fim: datetime,
+) -> list[Alerta]:
+    """L/ha da sessão acima da mediana do histórico da mesma combinação."""
+    if l_ha is None or base.l_ha is None or base.sessoes < cfg.l_ha_min_sessoes:
+        return []
+    if not (np.isfinite(l_ha) and np.isfinite(base.l_ha)) or base.l_ha <= 0:
+        return []
+    limiar = base.l_ha * (1 + cfg.l_ha_desvio)
+    if l_ha <= limiar:
+        return []
+    return [
+        Alerta(
+            tipo="l_ha_alto",
+            severidade="atencao",
+            chave_sessao=chave,
+            inicio=inicio,
+            fim=fim,
+            valor=round(l_ha, 2),
+            limiar=round(limiar, 2),
+            mensagem=(
+                f"Consumo de {l_ha:.1f} L/ha, {100 * (l_ha / base.l_ha - 1):.0f}% acima da "
+                f"mediana de {base.sessoes} sessões desta máquina e implemento "
+                f"({base.l_ha:.1f} L/ha)."
+            ),
+            detalhes={"linha_base_l_ha": round(base.l_ha, 2), "sessoes_base": base.sessoes},
+        )
+    ]
+
+
 def de_qualidade(chave: str, qualidade: Qualidade, inicio: datetime, fim: datetime) -> list[Alerta]:
     """Problemas de dado relevantes viram alerta (o gestor precisa saber)."""
     tipos = {

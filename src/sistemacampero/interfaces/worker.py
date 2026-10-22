@@ -14,6 +14,7 @@ import socket
 import threading
 import time
 import uuid
+from collections.abc import Callable
 from typing import Any
 
 from sistemacampero.application.ingestao import ExecutorDeJobs
@@ -56,7 +57,9 @@ class Worker:
         poll_min_s: float = 1.0,
         poll_max_s: float = 5.0,
         reaper_s: float = 60,
+        periodicas: list[Callable[[], int]] | None = None,
     ) -> None:
+        self.periodicas = periodicas or []
         self.fila = fila
         self.executor = executor
         self.id = worker_id or f"{socket.gethostname()}:{os.getpid()}:{uuid.uuid4().hex[:6]}"
@@ -132,6 +135,11 @@ class Worker:
             except Exception:
                 logger.exception("erro no laço do worker")
                 trabalhou = False
+            for tarefa in self.periodicas:  # ex.: outbox de notificações
+                try:
+                    trabalhou = bool(tarefa()) or trabalhou
+                except Exception:
+                    logger.exception("erro em tarefa periódica")
             # Polling adaptativo: fila vazia -> espera cresce até poll_max.
             espera = self.poll_min_s if trabalhou else min(espera * 1.5, self.poll_max_s)
             if not trabalhou:
@@ -155,6 +163,7 @@ def main() -> int:
         heartbeat_s=settings.worker_heartbeat_s,
         poll_min_s=settings.worker_poll_min_s,
         poll_max_s=settings.worker_poll_max_s,
+        periodicas=[c.notificacoes.enviar_pendentes] if c.notificacoes else [],
     )
     parar = threading.Event()
     for sinal in (signal.SIGINT, signal.SIGTERM):

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 
+from sistemacampero.application.alertas import ServicoAlertas, ServicoNotificacoes
 from sistemacampero.application.cadastro import ServicoCadastro
 from sistemacampero.application.ingestao import ExecutorDeJobs, ServicoIngestao
 from sistemacampero.application.kpis import ServicoKpis
@@ -12,8 +13,10 @@ from sistemacampero.application.tenancy import ServicoTenancy
 from sistemacampero.domain.ports import Armazenamento, VerificadorDeProntidao, VerificadorDeToken
 from sistemacampero.domain.services.rules import ConfigRegras
 from sistemacampero.infrastructure.config import Settings
+from sistemacampero.infrastructure.notificacoes import Cifra, Notificador
 from sistemacampero.infrastructure.parsers.john_deere_gen4.masterdata import ler_cadastro_gen4
 from sistemacampero.infrastructure.parsers.registry import registro_padrao
+from sistemacampero.infrastructure.persistence.alertas import PostgresRepositorioAlertas
 from sistemacampero.infrastructure.persistence.cadastro import PostgresRepositorioCadastro
 from sistemacampero.infrastructure.persistence.db import Database
 from sistemacampero.infrastructure.persistence.ingestao import (
@@ -64,6 +67,11 @@ class Container:
     servico_cadastro: ServicoCadastro | None = None
     consultas_kpi: PostgresConsultasKpi | None = None
     kpis: ServicoKpis | None = None
+    repo_alertas: PostgresRepositorioAlertas | None = None
+    alertas: ServicoAlertas | None = None
+    notificacoes: ServicoNotificacoes | None = None
+    notificador: Notificador | None = None
+    cifra: Cifra | None = None
     db: Database | None = None
 
     def fechar(self) -> None:
@@ -103,6 +111,24 @@ def construir(settings: Settings, storage: Armazenamento | None = None) -> Conta
     repo_ingestao = PostgresRepositorioIngestao(db)
     cadastro = PostgresRepositorioCadastro(db)
     consultas = PostgresConsultasKpi(db)
+    repo_alertas = PostgresRepositorioAlertas(db)
+    servico_alertas = ServicoAlertas(repo_alertas, repo_ingestao)
+    cifra = Cifra(settings.chave_cifragem.get_secret_value() if settings.chave_cifragem else None)
+    smtp = (
+        {
+            "host": settings.smtp_host,
+            "porta": settings.smtp_porta,
+            "usuario": settings.smtp_usuario,
+            "senha": settings.smtp_senha.get_secret_value() if settings.smtp_senha else None,
+            "remetente": settings.smtp_remetente or "alertas@campero.local",
+            "tls": settings.smtp_tls,
+        }
+        if settings.smtp_host
+        else None
+    )
+    notificador = Notificador(
+        cifra, smtp, str(settings.frontend_url) if settings.frontend_url else None
+    )
     regras = ConfigRegras()
     executor = ExecutorDeJobs(
         repo=repo_ingestao,
@@ -113,6 +139,7 @@ def construir(settings: Settings, storage: Armazenamento | None = None) -> Conta
         config_regras=asdict(regras),
         cadastro=cadastro,
         leitor_cadastro=ler_cadastro_gen4,
+        alertas=servico_alertas,
     )
     return Container(
         settings=settings,
@@ -127,5 +154,10 @@ def construir(settings: Settings, storage: Armazenamento | None = None) -> Conta
         servico_cadastro=ServicoCadastro(cadastro, repo_ingestao),
         consultas_kpi=consultas,
         kpis=ServicoKpis(consultas, somas, regras.versao),
+        repo_alertas=repo_alertas,
+        alertas=servico_alertas,
+        notificacoes=ServicoNotificacoes(repo_alertas, notificador),
+        notificador=notificador,
+        cifra=cifra,
         db=db,
     )

@@ -139,7 +139,7 @@ class PostgresRepositorioResultados:
                 sessao_id,
                 maquina_id,
                 talhao_id,
-                versao_regras,
+                r.regras.versao,  # alertas: versão da config de regras DA ORGANIZAÇÃO
                 execucao_id,
                 r,
             )
@@ -437,9 +437,10 @@ class PostgresRepositorioResultados:
         r: ResultadoSessao,
     ) -> None:
         digitais = []
+        novos: list[tuple[UUID, str]] = []
         for a in r.alertas:
             digitais.append(a.impressao_digital)
-            conn.execute(
+            linha = conn.execute(
                 "insert into public.alertas (organizacao_id, sessao_id, maquina_id, talhao_id,"
                 " tipo, severidade, versao_regras, execucao_id, inicio, fim, valor, limiar,"
                 " mensagem, detalhes, impressao_digital)"
@@ -450,7 +451,8 @@ class PostgresRepositorioResultados:
                 "  valor = excluded.valor, limiar = excluded.limiar,"
                 "  mensagem = excluded.mensagem, detalhes = excluded.detalhes,"
                 "  status = case when alertas.status = 'invalidado' then 'aberto'"
-                "    else alertas.status end",
+                "    else alertas.status end"
+                " returning id, severidade, (xmax = 0) as novo",
                 (
                     org,
                     sessao_id,
@@ -468,6 +470,19 @@ class PostgresRepositorioResultados:
                     Jsonb(json.loads(json.dumps(a.detalhes, default=str))),
                     a.impressao_digital,
                 ),
+            ).fetchone()
+            if linha is not None and linha["novo"]:
+                novos.append((linha["id"], linha["severidade"]))
+        # Outbox: a notificação nasce na mesma transação do alerta NOVO
+        # (reprocessar não renotifica).
+        for alerta_id, severidade in novos:
+            conn.execute(
+                "insert into interno.notificacoes (organizacao_id, alerta_id, destino_id)"
+                " select %s, %s, d.id from public.destinos_notificacao d where d.ativo"
+                " and array_position(array['info','atencao','alto'], %s)"
+                "   >= array_position(array['info','atencao','alto'], d.severidade_minima)"
+                " on conflict (alerta_id, destino_id) do nothing",
+                (org, alerta_id, severidade),
             )
         conn.execute(
             "update public.alertas set status = 'invalidado'"

@@ -12,10 +12,11 @@ import io
 import logging
 import tempfile
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any, BinaryIO, Protocol, cast
 from uuid import UUID
 
+from sistemacampero.application.alertas import ServicoAlertas
 from sistemacampero.application.cadastro import ServicoCadastro
 from sistemacampero.application.processamento import ProcessadorDeArquivo, ResultadoSessao
 from sistemacampero.domain.cadastro import ImportacaoCadastro
@@ -163,8 +164,10 @@ class ExecutorDeJobs:
         config_regras: dict[str, Any],
         cadastro: RepositorioCadastro,
         leitor_cadastro: LeitorCadastro,
+        alertas: ServicoAlertas | None = None,
         limites_zip: zip_seguro.LimitesZip | None = None,
     ) -> None:
+        self._alertas = alertas
         self._repo = repo
         self._cadastro = cadastro
         self._leitor_cadastro = leitor_cadastro
@@ -210,8 +213,22 @@ class ExecutorDeJobs:
         # Talhões da organização uma vez por job; o manual (correção do gestor) manda.
         talhoes = LocalizadorDeTalhoes(self._cadastro.contornos(org))
         manual = self._cadastro.talhao_manual(org, arquivo_id)
+        regras = self._alertas.regras(org) if self._alertas else None
+        sha = str(arquivo["sha256"])
+
+        def linhas_base(meta: Any) -> Any:
+            assert self._alertas is not None
+            return self._alertas.linhas_base(org, meta, sha)
+
         try:
-            r = self._processador.processar(dados, ctx, talhoes=talhoes, talhao_manual_id=manual)
+            r = self._processador.processar(
+                dados,
+                ctx,
+                talhoes=talhoes,
+                talhao_manual_id=manual,
+                regras=regras,
+                linhas_base=linhas_base if self._alertas else None,
+            )
         except Invalido as exc:  # formato errado/corrompido: não adianta tentar de novo
             self._repo.marcar_arquivo(
                 org, arquivo_id, StatusArquivo.REJEITADO, f"{exc.codigo}: {exc.mensagem}"
@@ -233,7 +250,7 @@ class ExecutorDeJobs:
         controle.verificar()
 
         status, motivo = self._resultados.gravar_sessao(
-            org, arquivo_id, r, limpo, self._versao, self._config
+            org, arquivo_id, r, limpo, self._versao, asdict(r.regras)
         )
         return {
             "status": status.value,

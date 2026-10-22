@@ -61,6 +61,8 @@ class ContextoOrganizacao:
 
     organizacao_id: UUID
     papel: Papel
+    usuario_id: UUID | None = None  # None quando o acesso é por chave de API
+    chave_api_id: UUID | None = None
 
     def exigir(self, permissao: Permissao) -> None:
         if not papel_permite(self.papel, permissao):

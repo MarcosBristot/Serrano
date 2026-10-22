@@ -44,6 +44,7 @@ def container(
         supabase_jwt_secret=SEGREDO,
         storage_dir=tmp_path_factory.mktemp("storage"),
         db_pool_max=6,
+        chave_cifragem="x9Yp4n1bQm0yX1rD0H8q3jzK8lQ2b0nY7mV5cH6tW1E=",
     )
     c = construir(settings, storage=ArmazenamentoLocal(settings.storage_dir))
     assert c.db is not None

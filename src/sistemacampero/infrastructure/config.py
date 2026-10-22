@@ -49,6 +49,16 @@ class Settings(BaseSettings):
     worker_poll_min_s: float = Field(default=1.0, gt=0)
     worker_poll_max_s: float = Field(default=5.0, gt=0)
 
+    # Notificações e convites
+    frontend_url: AnyHttpUrl | None = None  # links nos e-mails
+    chave_cifragem: SecretStr | None = None  # Fernet (segredos de webhook)
+    smtp_host: str | None = None
+    smtp_porta: int = 587
+    smtp_usuario: str | None = None
+    smtp_senha: SecretStr | None = None
+    smtp_remetente: str | None = None
+    smtp_tls: bool = True
+
     cors_origens: list[str] = Field(default_factory=list)
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     log_json: bool = True

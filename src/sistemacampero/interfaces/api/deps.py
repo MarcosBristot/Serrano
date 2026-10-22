@@ -49,7 +49,8 @@ def organizacao(
             raise Invalido(
                 "X-Organizacao-Id deve ser um UUID.", codigo="ORGANIZACAO_INVALIDA"
             ) from None
-    return c.tenancy.resolver_organizacao(quem, org_id)
+    ctx = c.tenancy.resolver_organizacao(quem, org_id)
+    return ContextoOrganizacao(ctx.organizacao_id, ctx.papel, usuario_id=quem.usuario_id)
 
 
 OrganizacaoDep = Annotated[ContextoOrganizacao, Depends(organizacao)]
