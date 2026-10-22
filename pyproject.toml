@@ -23,6 +23,7 @@ dependencies = [
     "shapely>=2.0",
     "python-multipart>=0.0.9",
     "pyproj>=3.6",
+    "email-validator>=2.1",
 ]
 
 [dependency-groups]

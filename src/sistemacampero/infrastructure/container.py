@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass
 
 from sistemacampero.application.alertas import ServicoAlertas, ServicoNotificacoes
 from sistemacampero.application.cadastro import ServicoCadastro
+from sistemacampero.application.equipe import ServicoEquipe
 from sistemacampero.application.ingestao import ExecutorDeJobs, ServicoIngestao
 from sistemacampero.application.kpis import ServicoKpis
 from sistemacampero.application.processamento import ProcessadorDeArquivo
@@ -19,6 +20,7 @@ from sistemacampero.infrastructure.parsers.registry import registro_padrao
 from sistemacampero.infrastructure.persistence.alertas import PostgresRepositorioAlertas
 from sistemacampero.infrastructure.persistence.cadastro import PostgresRepositorioCadastro
 from sistemacampero.infrastructure.persistence.db import Database
+from sistemacampero.infrastructure.persistence.equipe import PostgresRepositorioEquipe
 from sistemacampero.infrastructure.persistence.ingestao import (
     PostgresFilaDeJobs,
     PostgresRepositorioIngestao,
@@ -72,6 +74,8 @@ class Container:
     notificacoes: ServicoNotificacoes | None = None
     notificador: Notificador | None = None
     cifra: Cifra | None = None
+    repo_equipe: PostgresRepositorioEquipe | None = None
+    equipe: ServicoEquipe | None = None
     db: Database | None = None
 
     def fechar(self) -> None:
@@ -112,6 +116,7 @@ def construir(settings: Settings, storage: Armazenamento | None = None) -> Conta
     cadastro = PostgresRepositorioCadastro(db)
     consultas = PostgresConsultasKpi(db)
     repo_alertas = PostgresRepositorioAlertas(db)
+    repo_equipe = PostgresRepositorioEquipe(db)
     servico_alertas = ServicoAlertas(repo_alertas, repo_ingestao)
     cifra = Cifra(settings.chave_cifragem.get_secret_value() if settings.chave_cifragem else None)
     smtp = (
@@ -159,5 +164,7 @@ def construir(settings: Settings, storage: Armazenamento | None = None) -> Conta
         notificacoes=ServicoNotificacoes(repo_alertas, notificador),
         notificador=notificador,
         cifra=cifra,
+        repo_equipe=repo_equipe,
+        equipe=ServicoEquipe(repo_equipe, notificador.convite if smtp else None),
         db=db,
     )

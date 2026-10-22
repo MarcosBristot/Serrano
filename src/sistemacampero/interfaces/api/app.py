@@ -18,7 +18,15 @@ from sistemacampero.infrastructure.container import Container, construir
 from sistemacampero.infrastructure.logging_config import configurar_logs
 from sistemacampero.interfaces.api import errors
 from sistemacampero.interfaces.api.middleware import Metricas, RequestContextMiddleware
-from sistemacampero.interfaces.api.routers import alertas, cadastro, conta, ingestao, kpis, saude
+from sistemacampero.interfaces.api.routers import (
+    alertas,
+    cadastro,
+    conta,
+    equipe,
+    ingestao,
+    kpis,
+    saude,
+)
 
 PREFIXO = "/api/v1"
 
@@ -58,7 +66,11 @@ def create_app(
             expose_headers=["X-Request-ID"],
         )
     # Adicionado por último = mais externo: o request_id vale também para o CORS e erros.
-    app.add_middleware(RequestContextMiddleware, metricas=app.state.metricas)
+    app.add_middleware(
+        RequestContextMiddleware,
+        metricas=app.state.metricas,
+        auditar=container.repo_equipe.auditar if container.repo_equipe else None,
+    )
 
     app.include_router(saude.router)  # /health, /ready e /metrics na raiz (healthcheck)
     app.include_router(saude.router, prefix=PREFIXO, include_in_schema=False)
@@ -70,4 +82,5 @@ def create_app(
     app.include_router(kpis.router, prefix=PREFIXO)
     app.include_router(kpis.legado, prefix=PREFIXO)
     app.include_router(alertas.router, prefix=PREFIXO)
+    app.include_router(equipe.router, prefix=PREFIXO)
     return app

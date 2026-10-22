@@ -95,6 +95,29 @@ class Notificador:
         else:
             raise RuntimeError(f"tipo de destino sem envio implementado: {destino['tipo']}")
 
+    def convite(self, para: str, papel: str, token: str) -> None:
+        if not self._smtp or not self._frontend:
+            raise RuntimeError("SMTP ou FRONTEND_URL não configurados")
+        msg = EmailMessage()
+        msg["Subject"] = "[Campero] Você foi convidado para uma organização"
+        msg["From"] = self._smtp["remetente"]
+        msg["To"] = para
+        msg.set_content(
+            f"Você foi convidado como {papel} no Sistema Campero.\n\n"
+            f"Aceite em: {self._frontend}/convite?token={token}\n\n"
+            "O convite vale por 7 dias."
+        )
+        self._enviar_email(msg)
+
+    def _enviar_email(self, msg: EmailMessage) -> None:
+        assert self._smtp is not None
+        with smtplib.SMTP(self._smtp["host"], self._smtp["porta"], timeout=15) as s:
+            if self._smtp.get("tls", True):
+                s.starttls(context=ssl.create_default_context())
+            if self._smtp.get("usuario"):
+                s.login(self._smtp["usuario"], self._smtp["senha"])
+            s.send_message(msg)
+
     def _email(self, para: str, a: dict[str, Any]) -> None:
         if not self._smtp:
             raise RuntimeError("SMTP não configurado")
@@ -110,9 +133,4 @@ class Notificador:
         if a.get("url"):
             linhas += ["", a["url"]]
         msg.set_content("\n".join(linhas))
-        with smtplib.SMTP(self._smtp["host"], self._smtp["porta"], timeout=15) as s:
-            if self._smtp.get("tls", True):
-                s.starttls(context=ssl.create_default_context())
-            if self._smtp.get("usuario"):
-                s.login(self._smtp["usuario"], self._smtp["senha"])
-            s.send_message(msg)
+        self._enviar_email(msg)

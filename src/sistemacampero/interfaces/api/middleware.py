@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import logging
 import re
 import time
 import uuid
+from collections.abc import Callable
+from typing import Any
 
+import anyio
 from prometheus_client import CollectorRegistry, Counter, Histogram
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -48,10 +52,46 @@ class Metricas:
         )
 
 
+_UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+_MUTACOES = {"POST", "PUT", "PATCH", "DELETE"}
+
+
+def evento_auditoria(scope: Scope, status: int, rid: str) -> dict[str, Any] | None:
+    """Toda mutação bem-sucedida de uma organização vira linha de auditoria (sem PII)."""
+    estado = scope.get("state") or {}
+    if scope["method"] not in _MUTACOES or status >= 400 or not estado.get("organizacao_id"):
+        return None
+    partes = [p for p in str(scope["path"]).split("/") if p][2:]  # tira "api/v1"
+    recurso_id = next((p for p in partes if _UUID.fullmatch(p)), None)
+    cliente = scope.get("client")
+    ip = None
+    if cliente:
+        try:
+            ip = str(ipaddress.ip_address(cliente[0]))
+        except ValueError:
+            ip = None
+    return {
+        "organizacao_id": estado["organizacao_id"],
+        "ator_id": estado.get("ator_id"),
+        "ator_tipo": estado.get("ator_tipo", "usuario"),
+        "acao": f"{scope['method']} {_rota_template(scope)}",
+        "recurso_tipo": partes[0] if partes else None,
+        "recurso_id": recurso_id,
+        "ip": ip,
+        "request_id": rid,
+    }
+
+
 class RequestContextMiddleware:
-    def __init__(self, app: ASGIApp, metricas: Metricas) -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+        metricas: Metricas,
+        auditar: Callable[[dict[str, Any]], None] | None = None,
+    ) -> None:
         self.app = app
         self.metricas = metricas
+        self.auditar = auditar
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -102,6 +142,12 @@ class RequestContextMiddleware:
             metodo = scope["method"]
             self.metricas.requisicoes.labels(metodo, rota, str(status)).inc()
             self.metricas.duracao.labels(metodo, rota).observe(duracao)
+            evento = evento_auditoria(scope, status, rid) if self.auditar else None
+            if evento is not None and self.auditar is not None:
+                try:
+                    await anyio.to_thread.run_sync(self.auditar, evento)
+                except Exception:
+                    logger.exception("falha ao gravar auditoria")
             logger.info(
                 "requisição",
                 extra={
