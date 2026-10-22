@@ -1,138 +1,125 @@
-# 🚜 Campero Sistemas
- 
-> **Fim da cegueira multimarca no campo.** Uma plataforma SaaS de gestão de frotas agrícolas que unifica dados de telemetria de diferentes fabricantes, gerando insights operacionais claros e acionáveis para o produtor rural.
- 
-## 📌 Sobre o Projeto
- 
-Produtores rurais frequentemente operam frotas mistas (John Deere, CNH, AGCO, etc.). Cada marca possui seu próprio ecossistema fechado de dados, dificultando a visão global da operação. A **Campero Sistemas** resolve esse problema através de um motor de ingestão de arquivos padronizados (pendrives), unificando a leitura de horímetros, consumo de combustível e tempo de ociosidade em um único painel.
- 
-**Local de Operação Inicial:** Passo Fundo e região (RS).
- 
-## 🚀 Principais Funcionalidades (MVP)
- 
-* **Ingestão Universal:** Leitura (parser) de arquivos brutos (CSV/XML) extraídos via pendrive das cabines dos tratores.
-* **Mapeamento Geoespacial:** Rastreamento de rotas e áreas trabalhadas utilizando banco de dados com suporte espacial.
-* **Análise de Consumo:** Cálculo automático de métricas vitais como *Litros/Horímetro* e *Litros/Hectare*.
-* **Alertas Inteligentes (IA):** Detecção automática de anomalias, como desperdício de combustível por tempo excessivo de motor ocioso (IDLE).
-## 🛠️ Stack Tecnológico
- 
-* **Frontend:** Web App Responsivo para interface de visualização e upload de arquivos.
-* **Backend:** API REST para processamento da regra de negócio e ingestão de dados.
-* **Banco de Dados:** PostgreSQL com extensão **PostGIS** para armazenamento e consulta de dados geoespaciais.
-* **Inteligência:** Módulo de IA / Scripts de análise para detecção de anomalias de consumo.
-## 👥 Equipe e Papéis
- 
-* **Marcos:** Liderança / Estruturação de Negócios e Legal.
-* **Charles:** Vendas / Validação de Mercado e Operação Pendrive.
-* **João:** Frontend / UI-UX Design.
-* **Raul:** Backend / Arquitetura PostGIS e APIs.
-* **Guilherme:** Backend / IA, Parser de Arquivos e Métricas.
-## 💻 Como Rodar o Projeto Localmente
- 
-### 1. Pré-requisitos
- 
-* Git instalado em sua máquina.
-* Node.js, Python ou ambiente da linguagem definida pela equipe.
-* PostgreSQL + PostGIS em execução (local ou via Docker).
-### 2. Passos para Instalação e Execução
- 
-Todo o projeto (Frontend e Backend) é executado a partir do diretório principal.
- 
-```bash
-# Clone o repositório para a sua máquina
-git clone https://github.com/MarcosBristot/SistemaCampero
- 
-# Entre na pasta raiz do projeto
-cd campero-sistemas
- 
+# 🚜 Campero Sistemas — backend v1
+
+> **Fim da cegueira multimarca no campo.** Plataforma SaaS que unifica a telemetria de frotas
+> agrícolas de diferentes fabricantes (pendrive do monitor) em métricas e alertas acionáveis.
+> Operação inicial: Passo Fundo e região (RS).
+
+Estado: **primeira versão completa (M1–M9)** do plano do backend v1. Deploy: [`docs/deploy.md`](docs/deploy.md) ·
+operação: [`docs/runbook.md`](docs/runbook.md) · piloto: [`docs/checklist-piloto.md`](docs/checklist-piloto.md). Decisões em
+[`docs/adr/0004`](docs/adr/0004-backend-v1-fundacao.md) (fundação),
+[`docs/adr/0005`](docs/adr/0005-formato-jdl-ancoras-e-gps.md) (formato `.jdl` e defeitos corrigidos) e
+[`docs/adr/0006`](docs/adr/0006-ingestao-assincrona.md) (ingestão assíncrona) e
+[`docs/adr/0007`](docs/adr/0007-cadastro-geo-e-cobertura.md) (cadastro, localização e cobertura).
+
+| Marco | Conteúdo | Status |
+|---|---|---|
+| M1 Fundação | DDD, config, API (problem+json, request id, métricas), auth JWT (JWKS/HS256), org ativa, schema completo + RLS + GRANTs, Docker, CI | ✅ |
+| M2 Parser + universal + sanitização | adapter JD Gen4 (âncoras, trilha GPS 5 Hz), registro e contrato de adapters, sanitização, métricas, qualidade, regras, 3 defeitos corrigidos, linha de base de 2026 | ✅ |
+| M3 Ingestão assíncrona | Storage (local + Supabase), fila durável com lease/reaper/backoff/dead-letter, worker, upload/lote/zip seguro, dedupe, cancelamento, limite do plano | ✅ |
+| M4 Cadastro + geo | CRUD, importação Gen4 (MasterData + contornos), contorno por desenho/GeoJSON, localização por GPS, correção manual, relocalização, área por cobertura | ✅ |
+| M5 Métricas + KPIs | métricas diárias (dia local, talhão por ponto), resumo, séries (hora/dia/semana/mês), ranking, safras, trajeto GeoJSON, mapa de calor de L/ha, preço do diesel e R$/ha, rotas legadas `/telemetry/*` | ✅ |
+| M6 Regras + alertas | ciclo de vida, comentários, limiares por organização, linhas de base (vazão, L/ha), reanálise, notificações (webhook HMAC, e-mail) com outbox | ✅ |
+| M7 Equipe | convites, papéis, chaves de API, auditoria automática | ✅ |
+| M8 Exportação + qualidade | CSV em streaming (Excel pt-BR), CSV/XLSX assíncrono com link, relatório de qualidade explicado | ✅ |
+| M9 Operação | rate limit, cabeçalhos de segurança, deploy (Supabase + Railway + CI de migrations), runbook, checklist do piloto | ✅ |
+
+## Estrutura
+
 ```
- 
-## 🛡️ Padrão de Contribuição e Git Flow
- 
-Para manter a estabilidade do código e a organização do histórico, utilizamos regras estritas de versionamento. A branch `master` (ou `main`) é protegida e não aceita commits diretos.
- 
-### 1. Nomenclatura de Branches
- 
-Crie a sua branch a partir da principal utilizando prefixos que indicam a natureza do trabalho:
- 
-* `feat/` - Para novas funcionalidades (ex: `feat/upload-pendrive`)
-* `fix/` - Para correção de bugs (ex: `fix/calculo-consumo`)
-* `docs/` - Para documentação (ex: `docs/acordo-societario`)
-* `refactor/` - Para refatoração de código existente
-### 2. Padrão de Commits (Conventional Commits)
- 
-Suas mensagens de commit devem ser claras, curtas e seguir o padrão:
- 
-* `feat: adiciona componente de grafico em barra`
-* `fix: corrige erro de leitura da coluna speed_kmh`
-* `docs: atualiza readme com instrucoes de banco de dados`
-### 3. Passo a Passo do Fluxo
- 
-1. Atualize sua base local: `git checkout master` e `git pull`
-2. Crie sua branch: `git checkout -b tipo/sua-tarefa`
-3. Faça suas alterações, adicione-as (`git add .`) e "commite" (`git commit -m "tipo: mensagem"`)
-4. Envie para o repositório remoto: `git push origin tipo/sua-tarefa`
-5. Abra um Pull Request (PR) no GitHub, referenciando o link do cartão no Trello.
-6. Aguarde a revisão (Code Review) e aprovação (Approve) de pelo menos 1 membro da equipe antes do Merge.
- 
-### 4. Setup do projeto — uv
-
-Este projeto usa **[uv](https://docs.astral.sh/uv/)** para gerenciar o ambiente virtual e as dependências. Este guia explica como instalar e usar a ferramenta.
-
-## 1. Instalando o uv
-
-Escolha o comando de acordo com o seu sistema operacional:
-
-```bash
-# Linux / macOS
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Windows (PowerShell)
-powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
-
-# Alternativa via pip (qualquer SO, se já tiver Python instalado)
-pip install uv
+src/sistemacampero/
+  domain/          entidades, schema universal, portas (Protocol), erros tipados
+    services/      sanitization, metrics, quality, rules, geo — sem FastAPI/psycopg/os.environ
+  application/     casos de uso (tenancy, processamento de arquivo)
+  infrastructure/  config, persistence (psycopg 3), security (JWT), parsers/ (adapters), container
+  interfaces/      api/ (FastAPI), cli.py
+supabase/migrations/   schema versionado (fonte da verdade)
+db/bootstrap_supabase_local.sql   só dev/teste: o que o Supabase já traz pronto
+tests/unit/  sem I/O · tests/contrato/  todo adapter · tests/regressao/  defeitos do M0
+tests/sinteticos/  gerador de .jdl · tests/integracao/  PostGIS real, como cada papel
+scripts/regressao_dump.py   regressão com o dump real (fora do Git) x linha de base congelada
 ```
 
-Verifique a instalação:
+## Rodando local
+
+Pré-requisitos: [uv](https://docs.astral.sh/uv/) e Docker.
 
 ```bash
-uv --version
-```
-
-## 2. Clonando e configurando o projeto
-
-```bash
-git clone https://github.com/MarcosBristot/SistemaCampero
-cd SistemaCampero
-
-# Cria o ambiente virtual e instala todas as dependências
-# (baseado no pyproject.toml + uv.lock)
 uv sync
+uv run pytest tests/unit                        # sem banco
+docker compose up --build                       # PostGIS + migrations + API + worker (http://localhost:8000/docs)
 ```
 
-O `uv sync` cria uma pasta `.venv/` local com o ambiente virtual e instala exatamente as versões travadas no `uv.lock`. Isso garante que todos no time usem as mesmas versões de bibliotecas.
-
-Para rodar qualquer comando/script dentro desse ambiente, use `uv run`:
+Testes de integração (com o `db` do compose de pé; cada execução cria e apaga um banco próprio):
 
 ```bash
-uv run python meu_script.py
+# PowerShell: $env:CAMPERO_TEST_DATABASE_URL="postgresql://postgres:postgres@localhost:54322/postgres"
+export CAMPERO_TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:54322/postgres
+uv run pytest
 ```
 
-### Adicionando uma nova dependência
+Qualidade (o CI roda o mesmo):
 
 ```bash
-uv add nome-do-pacote          # dependência normal
+uv run ruff format --check src tests scripts && uv run ruff check src tests scripts && uv run mypy
 ```
 
-Isso atualiza automaticamente o `pyproject.toml` e o `uv.lock`. **Sempre commite o `uv.lock`** junto com as mudanças, para manter o ambiente reprodutível para todo o time.
-
-## 3. Resumo rápido para quem está entrando no projeto agora
+Regressão com um dump real de pendrive (a pasta não vai para o Git):
 
 ```bash
-git clone https://github.com/MarcosBristot/SistemaCampero
-cd SistemaCampero
-uv sync
+uv run python scripts/regressao_dump.py "<pasta JD-Data/log>"
 ```
 
-Pronto — ambiente configurado e pronto para rodar o projeto.
+Nova marca: [`docs/como-adicionar-marca.md`](docs/como-adicionar-marca.md).
+
+Rodar a API fora do Docker: copie `.env.example` para `.env`, preencha e
+`uv run sistemacampero api --reload`. Migrations num banco qualquer:
+`uv run sistemacampero db migrar --database-url <dsn>` (`--bootstrap` só em PostGIS local).
+
+## API (v1)
+
+Prefixo `/api/v1`, OpenAPI em `/docs`. Autenticação: `Authorization: Bearer <JWT do Supabase>`.
+Organização ativa: header `X-Organizacao-Id` (opcional se o usuário tiver uma só).
+
+| Rota | Descrição |
+|---|---|
+| `GET /health` · `GET /ready` · `GET /metrics` | vivo · banco ok · Prometheus |
+| `GET /api/v1/me` | usuário e organizações |
+| `POST /api/v1/organizacoes` | cria a primeira organização (owner, plano básico em trial) |
+| `GET /api/v1/organizacao-ativa` | organização e papel que valem para a requisição |
+| `POST /api/v1/telemetry/upload?marca=&tecnologia=&lote_id=` | **um** `.jdl` ou `.zip` por chamada; 202 com `job_id`, `arquivo_id`, `duplicado` |
+| `POST /api/v1/batches` · `GET /api/v1/batches/{id}` | lote de uploads e status agregado |
+| `GET /api/v1/jobs/{id}` · `POST /api/v1/jobs/{id}/cancelar` | situação do processamento |
+| `GET /api/v1/arquivos?status=&limit=&cursor=` | arquivos recebidos (paginação por cursor) |
+| `GET/POST/PATCH/DELETE /api/v1/fazendas`, `/talhoes`, `/implementos`, `/operadores` | cadastro (talhão com GeoJSON) |
+| `PUT /api/v1/talhoes/{id}/contorno` · `PUT .../contorno/arquivo` · `DELETE .../contorno` | contorno desenhado ou `.gjson`; reprocessa as sessões afetadas |
+| `GET /api/v1/maquinas` · `PATCH /api/v1/maquinas/{id}` | apelido, ativar/desativar (respeita o plano) |
+| `GET /api/v1/sessions` · `GET /api/v1/sessions/{id}` · `PATCH /api/v1/sessions/{id}` | sessões; talhão manual e operador |
+| `GET /api/v1/kpis/resumo` · `/kpis/series?granularidade=` · `/kpis/ranking?por=` · `/kpis/safras?comparar=` | KPIs (filtros: `inicio`, `fim`, `maquina_id`, `talhao_id`, `operacao`) |
+| `GET /api/v1/mapas/calor` · `GET /api/v1/sessions/{id}/track` | mapa de calor de L/ha e trajeto (GeoJSON) |
+| `GET/POST/PATCH /api/v1/precos-combustivel` | preço do diesel por período (padrão: ANP RS, S10 R$ 6,59/L) |
+| `GET /api/v1/telemetry/machine/{serial}` · `GET /api/v1/telemetry/stats/{serial}` | contrato legado do frontend |
+| `GET /api/v1/alerts` · `GET /alerts/{id}` · `POST /alerts/{id}/reconhecer\|resolver\|reabrir` · `POST /alerts/{id}/comentarios` | alertas |
+| `GET/PUT /api/v1/config/regras` · `POST /api/v1/analysis/run` | limiares e reanálise |
+| `GET/POST/PATCH/DELETE /api/v1/destinos-notificacao` · `POST .../{id}/teste` | e-mail/webhook |
+| `GET /api/v1/membros` · `POST /convites` · `POST /convites/{token}/aceitar` · `/chaves-api` · `/auditoria` | equipe |
+| `GET /api/v1/exportacoes/csv` · `POST /exportacoes` · `GET /exportacoes/{id}` · `GET /qualidade/relatorio` | exportação e qualidade |
+| `GET /api/v1/admin/jobs?status=morto` · `POST /api/v1/admin/jobs/{id}/reenfileirar` · `POST /api/v1/admin/reabrir-bloqueados` | operação (só owner) |
+
+Erros seguem RFC 9457 (`application/problem+json`) com `code` estável, por exemplo
+`NAO_AUTENTICADO`, `TOKEN_EXPIRADO`, `SEM_ORGANIZACAO`, `ORGANIZACAO_AMBIGUA`, `SLUG_EM_USO`,
+`FORMATO_NAO_SUPORTADO`, `ARQUIVO_GRANDE_DEMAIS` (413), `PAPEL_SEM_PERMISSAO`,
+`GEOMETRIA_INVALIDA`, `PLANO_LIMITE_MAQUINAS` (409), `REFERENCIA_INEXISTENTE`.
+
+## Segurança
+
+- **Rotacione a chave `service_role`** exposta no histórico (commit `49fc79b`):
+  [`docs/seguranca-rotacao-de-chave.md`](docs/seguranca-rotacao-de-chave.md).
+- Nunca commite `.env`, `.jdl`, `.parquet` nem dados de clientes. O CI roda gitleaks e pip-audit.
+
+## Equipe e fluxo Git
+
+Marcos (negócios/legal) · Charles (vendas, operação pendrive) · João (frontend) ·
+Raul (backend, PostGIS/APIs) · Guilherme (backend, IA/parser/métricas).
+
+Branches `feat/`, `fix/`, `docs/`, `refactor/`; Conventional Commits; PR com 1 aprovação;
+`main` protegida.

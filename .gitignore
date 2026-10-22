@@ -216,3 +216,19 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+.env.*
+!.env.example
+data/
+*.zip
+requisitos.txt
+
+# Dados reais de clientes / saídas do pipeline (nunca versionar)
+data_work/
+out_*/
+*.jdl
+*.parquet
+JD-Data/
+Trator*/
+
+# Storage local (dev)
+data_storage/

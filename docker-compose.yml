@@ -1,0 +1,64 @@
+# Ambiente local: PostGIS com bootstrap do Supabase + migrations + API + worker.
+#   docker compose up --build
+#   API: http://localhost:8000/docs   Banco: localhost:54322 (postgres/postgres, só local)
+# Storage local (disco) num volume compartilhado entre API e worker.
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "54322:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  migrate:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/campero
+      CAMPERO_BACKEND_SENHA: campero_local
+    command: ["sistemacampero", "db", "migrar", "--criar-banco", "--bootstrap", "--senha-backend-local"]
+    restart: "no"
+
+  api: &app
+    build: .
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    env_file:
+      - path: .env
+        required: false
+    environment: &ambiente
+      AMBIENTE: dev
+      DATABASE_URL: postgresql://campero_backend:campero_local@db:5432/campero
+      LOG_JSON: "false"
+      STORAGE_BACKEND: local
+      STORAGE_DIR: /app/storage
+      WORKER_LEASE_S: ${WORKER_LEASE_S:-600}
+      WORKER_HEARTBEAT_S: ${WORKER_HEARTBEAT_S:-60}
+      # Só local: permite emitir tokens HS256 de teste. Com Supabase, defina SUPABASE_URL no .env.
+      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-segredo-local-de-desenvolvimento-nao-usar}
+    volumes:
+      - storage:/app/storage
+    ports:
+      - "8000:8000"
+
+  worker:
+    <<: *app
+    command: ["sistemacampero", "worker"]
+    ports: []
+    healthcheck:
+      disable: true
+
+volumes:
+  pgdata:
+  storage:
