@@ -15,6 +15,10 @@ backup diário: para o piloto, use Pro.
    supabase db push
    ```
    O workflow `.github/workflows/migrations.yml` faz isso: staging em push na `main`, produção em tag `v*`.
+   **Rede bloqueando a porta 5432?** (comum em redes de empresa/faculdade) Gere o script único com
+   `uv run python scripts/gerar_sql_supabase.py` e rode `configurar_supabase.sql` no **SQL Editor**
+   (pelo navegador). O arquivo contém a senha do `campero_backend` e está no `.gitignore`. Nesse caso a
+   API também não roda na sua máquina contra o Supabase: use outra rede ou o Railway.
 3. Senha do papel da aplicação (SQL editor, uma vez; guardar no cofre):
    ```sql
    alter role campero_backend password '<senha forte gerada>';
