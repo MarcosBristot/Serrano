@@ -232,3 +232,6 @@ Trator*/
 
 # Storage local (dev)
 data_storage/
+
+# SQL de configuração inicial (contém a senha do campero_backend)
+configurar_supabase.sql

@@ -20,6 +20,7 @@ ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 POR
 RUN mkdir -p /app/storage && chown campero:campero /app/storage
 USER campero
 EXPOSE 8000
+# Mesma imagem para os dois serviços: CAMPERO_SERVICO=api (padrão) ou worker.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
-    CMD python -c "import os,urllib.request; urllib.request.urlopen(f'http://127.0.0.1:{os.environ[\"PORT\"]}/health', timeout=4)"
-CMD ["sistemacampero", "api"]
+    CMD [ "${CAMPERO_SERVICO:-api}" != "api" ] || python -c "import os,urllib.request; urllib.request.urlopen(f'http://127.0.0.1:{os.environ[\"PORT\"]}/health', timeout=4)"
+CMD ["sh", "-c", "exec sistemacampero ${CAMPERO_SERVICO:-api}"]
