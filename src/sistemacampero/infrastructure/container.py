@@ -21,6 +21,7 @@ from sistemacampero.infrastructure.parsers.john_deere_gen4.masterdata import ler
 from sistemacampero.infrastructure.parsers.registry import registro_padrao
 from sistemacampero.infrastructure.persistence.alertas import PostgresRepositorioAlertas
 from sistemacampero.infrastructure.persistence.cadastro import PostgresRepositorioCadastro
+from sistemacampero.infrastructure.persistence.contatos import PostgresContatos
 from sistemacampero.infrastructure.persistence.db import Database
 from sistemacampero.infrastructure.persistence.equipe import PostgresRepositorioEquipe
 from sistemacampero.infrastructure.persistence.exportacao import PostgresExportacoes
@@ -80,6 +81,7 @@ class Container:
     repo_equipe: PostgresRepositorioEquipe | None = None
     equipe: ServicoEquipe | None = None
     repo_exportacao: PostgresExportacoes | None = None
+    contatos: PostgresContatos | None = None
     exportacao: ServicoExportacao | None = None
     db: Database | None = None
 
@@ -131,7 +133,7 @@ def construir(settings: Settings, storage: Armazenamento | None = None) -> Conta
             "porta": settings.smtp_porta,
             "usuario": settings.smtp_usuario,
             "senha": settings.smtp_senha.get_secret_value() if settings.smtp_senha else None,
-            "remetente": settings.smtp_remetente or "alertas@campero.local",
+            "remetente": settings.smtp_remetente or "alertas@serrano.local",
             "tls": settings.smtp_tls,
         }
         if settings.smtp_host
@@ -175,6 +177,7 @@ def construir(settings: Settings, storage: Armazenamento | None = None) -> Conta
         repo_equipe=repo_equipe,
         repo_exportacao=repo_exportacao,
         exportacao=exportacao,
+        contatos=PostgresContatos(db),
         equipe=ServicoEquipe(repo_equipe, notificador.convite if smtp else None),
         db=db,
     )

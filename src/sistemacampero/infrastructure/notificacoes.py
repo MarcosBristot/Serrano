@@ -43,7 +43,7 @@ class Cifra:
 
 
 def assinatura_webhook(segredo: str, corpo: bytes, timestamp: int) -> str:
-    """``X-Campero-Assinatura: t=<ts>,v1=<hmac_sha256(t.corpo)>`` (estilo Stripe)."""
+    """``X-Serrano-Assinatura: t=<ts>,v1=<hmac_sha256(t.corpo)>`` (estilo Stripe)."""
     mac = hmac.new(segredo.encode(), f"{timestamp}.".encode() + corpo, hashlib.sha256)
     return f"t={timestamp},v1={mac.hexdigest()}"
 
@@ -84,7 +84,7 @@ class Notificador:
             cabecalhos = {"Content-Type": "application/json"}
             segredo = self._cifra.decifrar(destino.get("segredo_cifrado"))
             if segredo:
-                cabecalhos["X-Campero-Assinatura"] = assinatura_webhook(
+                cabecalhos["X-Serrano-Assinatura"] = assinatura_webhook(
                     segredo, corpo, int(time.time())
                 )
             resp = self._http.post(destino["destino"], content=corpo, headers=cabecalhos)
@@ -99,11 +99,11 @@ class Notificador:
         if not self._smtp or not self._frontend:
             raise RuntimeError("SMTP ou FRONTEND_URL não configurados")
         msg = EmailMessage()
-        msg["Subject"] = "[Campero] Você foi convidado para uma organização"
+        msg["Subject"] = "[Serrano] Você foi convidado para uma organização"
         msg["From"] = self._smtp["remetente"]
         msg["To"] = para
         msg.set_content(
-            f"Você foi convidado como {papel} no Sistema Campero.\n\n"
+            f"Você foi convidado como {papel} na Serrano.\n\n"
             f"Aceite em: {self._frontend}/convite?token={token}\n\n"
             "O convite vale por 7 dias."
         )
@@ -122,7 +122,7 @@ class Notificador:
         if not self._smtp:
             raise RuntimeError("SMTP não configurado")
         msg = EmailMessage()
-        msg["Subject"] = f"[Campero] {a['severidade'].upper()}: {a['tipo'].replace('_', ' ')}"
+        msg["Subject"] = f"[Serrano] {a['severidade'].upper()}: {a['tipo'].replace('_', ' ')}"
         msg["From"] = self._smtp["remetente"]
         msg["To"] = para
         linhas = [a["mensagem"], ""]
