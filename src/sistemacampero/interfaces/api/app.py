@@ -50,7 +50,7 @@ def create_app(
         container.fechar()
 
     app = FastAPI(
-        title="Sistema Campero API",
+        title="Serrano API",
         version=__version__,
         lifespan=ciclo_de_vida,
         docs_url="/docs",

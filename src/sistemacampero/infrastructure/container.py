@@ -133,7 +133,7 @@ def construir(settings: Settings, storage: Armazenamento | None = None) -> Conta
             "porta": settings.smtp_porta,
             "usuario": settings.smtp_usuario,
             "senha": settings.smtp_senha.get_secret_value() if settings.smtp_senha else None,
-            "remetente": settings.smtp_remetente or "alertas@campero.local",
+            "remetente": settings.smtp_remetente or "alertas@serrano.local",
             "tls": settings.smtp_tls,
         }
         if settings.smtp_host
