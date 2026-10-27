@@ -181,3 +181,6 @@ main { position: relative; z-index: 2; }
   .rolar { display: none; }
   .vinheta { background: linear-gradient(0deg, rgba(8, 10, 9, 0.75) 0%, rgba(8, 10, 9, 0) 55%); }
 }
+@media (max-height: 760px) {
+  .rolar { display: none; }
+}
