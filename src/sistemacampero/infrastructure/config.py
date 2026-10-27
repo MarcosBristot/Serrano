@@ -62,6 +62,7 @@ class Settings(BaseSettings):
     # Proteção HTTP (por instância da API)
     limite_por_minuto: int = Field(default=600, ge=10)
     limite_uploads_por_minuto: int = Field(default=120, ge=1)
+    limite_contatos_por_minuto: int = Field(default=5, ge=1)
 
     cors_origens: list[str] = Field(default_factory=list)
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"

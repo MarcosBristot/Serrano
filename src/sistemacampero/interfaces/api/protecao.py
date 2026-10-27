@@ -55,10 +55,18 @@ def _chave_cliente(scope: Scope) -> str:
 
 
 class ProtecaoMiddleware:
-    def __init__(self, app: ASGIApp, por_minuto: int, uploads_por_minuto: int, hsts: bool) -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+        por_minuto: int,
+        uploads_por_minuto: int,
+        hsts: bool,
+        contatos_por_minuto: int = 5,
+    ) -> None:
         self.app = app
         self.geral = Balde(por_minuto)
         self.uploads = Balde(uploads_por_minuto)
+        self.contatos = Balde(contatos_por_minuto)  # formulário público do site
         self.hsts = hsts
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
@@ -71,6 +79,8 @@ class ProtecaoMiddleware:
             espera = self.geral.consumir(chave)
             if not espera and caminho.endswith("/upload") and scope["method"] == "POST":
                 espera = self.uploads.consumir(chave)
+            if not espera and caminho.endswith("/contatos") and scope["method"] == "POST":
+                espera = self.contatos.consumir(chave)
             if espera:
                 await self._recusar(send, espera)
                 return
