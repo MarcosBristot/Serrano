@@ -5,6 +5,7 @@ export default {
     extend: {
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],
+        marca: ['"Outfit"', "Inter", "sans-serif"],
         display: ["'Plus Jakarta Sans'", "Inter", "system-ui", "sans-serif"],
       },
       colors: {

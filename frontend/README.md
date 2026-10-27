@@ -1,6 +1,6 @@
-# Campero — frontend
+# Serrano — painel do cliente
 
-Painel web do Sistema Campero: React 18 + Vite + TypeScript + Tailwind, mapas com MapLibre (satélite Esri), gráficos com Recharts, login pelo Supabase.
+Painel web da Serrano: React 18 + Vite + TypeScript + Tailwind, mapas com MapLibre (satélite Esri), gráficos com Recharts, login pelo Supabase.
 
 ## Rodar
 

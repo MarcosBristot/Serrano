@@ -1,8 +1,10 @@
 import {
-  Bell, ChevronDown, Gauge, LayoutDashboard, LogOut, Map, Menu, Settings, Sprout, Tractor, Upload, X,
+  Bell, ChevronDown, LayoutDashboard, LogOut, Map, Menu, Settings, Sprout, Tractor, Upload, X,
 } from "lucide-react";
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
+
+import { Marca } from "./Marca";
 
 import { type Preset, usePeriodo, useSessao } from "../contextos/Sessao";
 
@@ -49,12 +51,9 @@ function Navegacao({ aoNavegar }: { aoNavegar?: () => void }) {
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-3 px-5 py-6">
-        <div className="grid h-10 w-10 place-items-center rounded-xl bg-trigo-400 text-folha-950">
-          <Gauge size={22} strokeWidth={2.5} />
-        </div>
         <div>
-          <div className="font-display text-xl font-extrabold tracking-tight text-white">Campero</div>
-          <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-folha-200/60">gestão de frota</div>
+          <Marca tamanho={24} className="text-white" />
+          <div className="mt-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-folha-200/60">gestão de frota</div>
         </div>
       </div>
 
@@ -126,7 +125,7 @@ export function Layout() {
 
       <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-folha-950/5 bg-[#f6f7f2]/90 px-4 py-3 backdrop-blur lg:hidden">
         <button onClick={() => setAberto(true)} className="rounded-lg p-2 text-folha-900"><Menu /></button>
-        <span className="font-display text-lg font-extrabold">Campero</span>
+        <Marca tamanho={18} className="text-folha-950" />
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">

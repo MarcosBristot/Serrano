@@ -1,7 +1,8 @@
 import { useMutation } from "@tanstack/react-query";
-import { ArrowRight, Fuel, Gauge, Map, Sprout } from "lucide-react";
+import { ArrowRight, Fuel, Map, Sprout } from "lucide-react";
 import { useState } from "react";
 
+import { Marca } from "../componentes/Marca";
 import { configuracaoOk, supabase } from "../lib/supabase";
 
 export default function Login() {
@@ -26,8 +27,7 @@ export default function Login() {
     <div className="grid min-h-screen lg:grid-cols-2">
       <section className="fundo-lavoura relative hidden flex-col justify-between overflow-hidden p-12 text-white lg:flex">
         <div className="flex items-center gap-3">
-          <div className="grid h-11 w-11 place-items-center rounded-xl bg-trigo-400 text-folha-950"><Gauge size={24} strokeWidth={2.5} /></div>
-          <span className="font-display text-2xl font-extrabold">Campero</span>
+          <Marca tamanho={28} />
         </div>
         <div className="max-w-lg">
           <h1 className="font-display text-5xl font-extrabold leading-[1.05]">
@@ -61,7 +61,7 @@ export default function Login() {
           }}
         >
           <div className="mb-8 lg:hidden">
-            <span className="font-display text-3xl font-extrabold text-folha-800">Campero</span>
+            <Marca tamanho={30} className="text-folha-950" />
           </div>
           <h2 className="text-2xl font-extrabold">Entrar</h2>
           <p className="mt-1 text-sm text-folha-900/60">Use o e-mail cadastrado pela sua fazenda.</p>

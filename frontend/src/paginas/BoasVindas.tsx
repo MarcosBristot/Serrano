@@ -20,7 +20,7 @@ export default function BoasVindas() {
     <div className="fundo-lavoura flex min-h-screen items-center justify-center p-6">
       <div className="cartao w-full max-w-md p-8">
         <div className="mb-5 grid h-12 w-12 place-items-center rounded-2xl bg-folha-50 text-folha-700"><Sprout /></div>
-        <h1 className="text-2xl font-extrabold">Bem-vindo ao Campero</h1>
+        <h1 className="text-2xl font-extrabold">Bem-vindo à Serrano</h1>
         <p className="mt-1 text-sm text-folha-900/60">
           {me?.email}, crie a sua fazenda (organização). Depois você convida a equipe e envia o pendrive do monitor.
         </p>
