@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+<!-- @parte:cabeca -->
+    <title>Acessibilidade · Serrano</title>
+    <meta name="description" content="Compromisso da Serrano com acessibilidade e como relatar barreiras." />
+  </head>
+  <body class="legal">
+<!-- @parte:topo-legal -->
+    <main id="conteudo" class="documento" tabindex="-1">
+      <h1>Declaração de acessibilidade</h1>
+      <p class="vigencia">Atualizada em {{vigencia}}</p>
+
+      <p>
+        Queremos que qualquer pessoa consiga usar o site e a plataforma Serrano, em linha com a Lei Brasileira de
+        Inclusão (Lei nº 13.146/2015) e com as diretrizes WCAG 2.1, nível AA, que usamos como referência.
+      </p>
+
+      <h2 id="recursos">O que já fizemos</h2>
+      <ul>
+        <li><strong>Teclado:</strong> todo o site funciona com Tab, Shift+Tab, Enter e Esc, com foco sempre visível e um atalho “Pular para o conteúdo”.</li>
+        <li><strong>Contraste:</strong> textos e controles seguem a razão mínima de 4,5:1 (3:1 para textos grandes e bordas de campos).</li>
+        <li><strong>Leitores de tela:</strong> títulos em ordem, regiões nomeadas, rótulos em todos os campos e mensagens de erro ligadas ao campo correspondente.</li>
+        <li><strong>Imagens:</strong> a cena 3D e os ícones são decorativos e ficam ocultos para leitores de tela; todo o conteúdo dela também está no texto da página. Imagens com informação têm texto alternativo.</li>
+        <li><strong>Movimento:</strong> com a opção “reduzir movimento” do sistema ativada, as animações de entrada e a suavização da câmera são desligadas.</li>
+        <li><strong>Zoom:</strong> o layout se adapta até 200% de zoom e a telas de celular.</li>
+      </ul>
+
+      <h2 id="limites">Limitações conhecidas</h2>
+      <ul>
+        <li>No painel do cliente, os mapas de satélite são visuais; os mesmos números estão nas tabelas e nos indicadores ao lado.</li>
+        <li>A cena 3D pode ficar lenta em computadores sem aceleração gráfica; o texto continua disponível normalmente.</li>
+      </ul>
+
+      <h2 id="contato">Encontrou uma barreira?</h2>
+      <p>
+        Conte para nós em <a href="mailto:{{emailContato}}">{{emailContato}}</a>, dizendo a página e o que aconteceu.
+        Respondemos e, se não for possível corrigir logo, oferecemos outra forma de acesso à informação.
+      </p>
+    </main>
+<!-- @parte:rodape -->
+    <script type="module" src="/src/legal.ts"></script>
+  </body>
+</html>

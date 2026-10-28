@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from sistemacampero.domain.tenancy import Papel
 from sistemacampero.infrastructure.container import Container
 from sistemacampero.interfaces.api.app import create_app
-from tests.conftest import RepositorioEmMemoria, emitir_token
+from tests.conftest import ACEITE, RepositorioEmMemoria, emitir_token
 
 
 @pytest.fixture
@@ -91,7 +91,9 @@ def test_me_lista_organizacoes(client: TestClient, repo: RepositorioEmMemoria) -
 
 def test_cria_organizacao(client: TestClient) -> None:
     uid = uuid.uuid4()
-    resp = client.post("/api/v1/organizacoes", json={"nome": "Fazenda Serrano"}, headers=_auth(uid))
+    resp = client.post(
+        "/api/v1/organizacoes", json={"nome": "Fazenda Serrano", **ACEITE}, headers=_auth(uid)
+    )
     assert resp.status_code == 201, resp.text
     assert resp.json()["slug"] == "fazenda-serrano"
     assert resp.json()["papel"] == "owner"
@@ -99,7 +101,7 @@ def test_cria_organizacao(client: TestClient) -> None:
     assert ativa == {"organizacao_id": resp.json()["id"], "papel": "owner"}
 
     _problema(
-        client.post("/api/v1/organizacoes", json={"nome": "Outra"}, headers=_auth(uid)),
+        client.post("/api/v1/organizacoes", json={"nome": "Outra", **ACEITE}, headers=_auth(uid)),
         409,
         "JA_TEM_ORGANIZACAO",
     )
@@ -192,3 +194,14 @@ def test_429_em_problem_json(container: Container) -> None:
     r = cli.get("/api/v1/me")
     assert r.json()["code"] == "LIMITE_DE_REQUISICOES" and int(r.headers["retry-after"]) >= 1
     assert cli.get("/health").status_code == 200  # healthcheck não é limitado
+
+
+def test_organizacao_exige_aceite_dos_termos(client: TestClient) -> None:
+    corpo = _problema(
+        client.post(
+            "/api/v1/organizacoes", json={"nome": "Sem Aceite"}, headers=_auth(uuid.uuid4())
+        ),
+        422,
+        "VALIDACAO",
+    )
+    assert ["body", "aceite_termos"] in [e["loc"] for e in corpo["errors"]]

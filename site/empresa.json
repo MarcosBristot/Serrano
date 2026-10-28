@@ -1,0 +1,15 @@
+{
+  "nomeFantasia": "Serrano",
+  "razaoSocial": "[RAZÃO SOCIAL]",
+  "cnpj": "[CNPJ]",
+  "endereco": "[ENDEREÇO COMPLETO, CEP]",
+  "cidadeUf": "[CIDADE/UF]",
+  "emailContato": "[E-MAIL DE CONTATO]",
+  "encarregado": "[NOME DO ENCARREGADO (DPO)]",
+  "emailPrivacidade": "[E-MAIL DO ENCARREGADO]",
+  "foro": "[COMARCA DO FORO]",
+  "hospedagemApi": "[PROVEDOR DE HOSPEDAGEM DA API E PAÍS]",
+  "provedorEmail": "[PROVEDOR DE E-MAIL TRANSACIONAL]",
+  "versaoDocumentos": "2026-10-28",
+  "vigencia": "28 de outubro de 2026"
+}

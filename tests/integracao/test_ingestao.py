@@ -14,7 +14,7 @@ from sistemacampero.domain.ingestao import Job, TipoJob
 from sistemacampero.infrastructure.container import Container
 from sistemacampero.infrastructure.storage.local import ArmazenamentoLocal
 from sistemacampero.interfaces.worker import Worker
-from tests.conftest import emitir_token
+from tests.conftest import ACEITE, emitir_token
 from tests.integracao.apoio import Conn, criar_usuario, drenar, um, upload, zipar
 from tests.sinteticos.jdl_builder import Cenario
 from tests.sinteticos.jdl_builder import construir as construir_jdl
@@ -92,7 +92,7 @@ def test_reenvio_e_duplicado_por_organizacao(
     outra = {"auth": {"Authorization": f"Bearer {emitir_token(uid)}"}}
     resp = client.post(
         "/api/v1/organizacoes",
-        json={"nome": f"Outra {uuid.uuid4().hex[:6]}"},
+        json={"nome": f"Outra {uuid.uuid4().hex[:6]}", **ACEITE},
         headers=outra["auth"],
     )
     assert resp.status_code == 201

@@ -21,7 +21,7 @@ from sistemacampero.infrastructure.parsers.john_deere_gen4.masterdata import ler
 from sistemacampero.infrastructure.parsers.registry import registro_padrao
 from sistemacampero.infrastructure.persistence.alertas import PostgresRepositorioAlertas
 from sistemacampero.infrastructure.persistence.cadastro import PostgresRepositorioCadastro
-from sistemacampero.infrastructure.persistence.contatos import PostgresContatos
+from sistemacampero.infrastructure.persistence.contatos import PostgresAceites, PostgresContatos
 from sistemacampero.infrastructure.persistence.db import Database
 from sistemacampero.infrastructure.persistence.equipe import PostgresRepositorioEquipe
 from sistemacampero.infrastructure.persistence.exportacao import PostgresExportacoes
@@ -82,6 +82,7 @@ class Container:
     equipe: ServicoEquipe | None = None
     repo_exportacao: PostgresExportacoes | None = None
     contatos: PostgresContatos | None = None
+    aceites: PostgresAceites | None = None
     exportacao: ServicoExportacao | None = None
     db: Database | None = None
 
@@ -178,6 +179,7 @@ def construir(settings: Settings, storage: Armazenamento | None = None) -> Conta
         repo_exportacao=repo_exportacao,
         exportacao=exportacao,
         contatos=PostgresContatos(db),
+        aceites=PostgresAceites(db),
         equipe=ServicoEquipe(repo_equipe, notificador.convite if smtp else None),
         db=db,
     )
