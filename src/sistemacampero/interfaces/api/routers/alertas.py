@@ -280,7 +280,7 @@ def testar_destino(c: ContainerDep, repo: RepoDep, ctx: OperarDep, ident: UUID) 
         "id": "00000000-0000-0000-0000-000000000000",
         "tipo": "teste",
         "severidade": "info",
-        "mensagem": "Teste de notificação do Sistema Campero.",
+        "mensagem": "Teste de notificação da Serrano.",
         "inicio": None,
     }
     assert c.notificador is not None

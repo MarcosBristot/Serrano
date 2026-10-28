@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0d110f" />
+    <title>Serrano · Telemetria agrícola</title>
+    <meta name="description" content="A Serrano lê o pendrive do monitor do trator e mostra horas, diesel, área, L/ha e R$/ha por máquina e por talhão." />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@700;800&family=Unbounded:wght@500;700;800&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <canvas id="cena" aria-hidden="true"></canvas>
+    <div class="vinheta" aria-hidden="true"></div>
+
+    <header class="topo">
+      <a href="#inicio" class="marca" aria-label="Serrano, início">
+        <svg viewBox="0 0 64 44" aria-hidden="true"><path d="M3 41 17 15l10 17L39 7l22 34" /></svg>
+        <span>Serrano</span>
+      </a>
+      <nav class="menu" aria-label="Seções">
+        <a href="#coleta">Como funciona</a>
+        <a href="#mapa">Mapa de calor</a>
+        <a href="#alertas">Alertas</a>
+        <a href="#resultados">Resultados</a>
+      </nav>
+      <div class="acoes">
+        <a class="pilula contorno" data-app href="http://localhost:5173">Entrar</a>
+        <a class="pilula cheia" href="#contato">Agendar demo</a>
+      </div>
+    </header>
+
+    <ol class="trilho" aria-hidden="true">
+      <li data-alvo="inicio"></li><li data-alvo="coleta"></li><li data-alvo="mapa"></li>
+      <li data-alvo="alertas"></li><li data-alvo="resultados"></li><li data-alvo="contato"></li>
+    </ol>
+
+    <aside class="hud" aria-label="Telemetria de demonstração">
+      <div class="hud-topo"><i></i> TELEMETRIA · DEMO</div>
+      <dl>
+        <div><dt>Velocidade</dt><dd><b id="hud-vel">0,0</b> km/h</dd></div>
+        <div><dt>Área</dt><dd><b id="hud-area">0,00</b> ha</dd></div>
+        <div><dt>Diesel</dt><dd><b id="hud-diesel">0,0</b> L</dd></div>
+        <div><dt>Consumo</dt><dd><b id="hud-lha">—</b> L/ha</dd></div>
+      </dl>
+    </aside>
+
+    <main>
+      <section id="inicio" class="secao heroi" data-cena="inicio">
+        <p class="rotulo revela">Telemetria agrícola · Rio Grande do Sul</p>
+        <h1 class="titulo-xl revela">Cada hectare.<br /><em>Cada litro.</em></h1>
+        <p class="lead revela">
+          A Serrano lê o pendrive do monitor do trator e transforma em horas, diesel, área, L/ha e R$/ha
+          por máquina e por talhão. Sem instalar nada na cabine.
+        </p>
+        <div class="botoes revela">
+          <a class="pilula cheia grande" href="#contato">Agendar demonstração</a>
+          <a class="pilula contorno grande" href="#coleta">Como funciona</a>
+        </div>
+        <p class="rolar"><span></span> Role para acompanhar a operação</p>
+      </section>
+
+      <section id="coleta" class="secao" data-cena="coleta">
+        <div class="painel esquerda">
+          <p class="rotulo revela">01 / Coleta</p>
+          <h2 class="titulo revela">Do pendrive ao painel em minutos.</h2>
+          <p class="revela">
+            Arraste os arquivos <code>.jdl</code> ou o <code>.zip</code> do pendrive. A Serrano identifica a máquina,
+            separa cada operação, localiza o talhão pelo GPS e calcula a área pela cobertura real, sem contar
+            duas vezes a sobreposição.
+          </p>
+          <ul class="chips revela">
+            <li>Monitores John Deere Gen4</li>
+            <li>Talhões e contornos importados</li>
+            <li>Qualidade do dado por operação</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="mapa" class="secao" data-cena="mapa">
+        <div class="painel direita">
+          <p class="rotulo revela">02 / Mapa de calor</p>
+          <h2 class="titulo revela">Veja onde o diesel vai embora.</h2>
+          <p class="revela">
+            O consumo em L/ha aparece sobre a lavoura em hexágonos. As manchas quentes mostram onde o trator
+            gastou mais: solo pesado, regulagem, sobreposição ou forma de operar.
+          </p>
+          <div class="escala revela" aria-label="Escala de consumo">
+            <span>menor L/ha</span><i></i><span>maior L/ha</span>
+          </div>
+        </div>
+      </section>
+
+      <section id="alertas" class="secao" data-cena="alertas">
+        <div class="painel esquerda">
+          <p class="rotulo revela">03 / Alertas</p>
+          <h2 class="titulo revela">Motor ligado, trator parado? Você fica sabendo.</h2>
+          <p class="revela">
+            Ociosidade, consumo acima do histórico da máquina, salto de GPS e dado inconsistente viram alertas
+            com hora, lugar e talhão. A equipe reconhece, comenta e resolve.
+          </p>
+          <div class="alerta-exemplo revela" role="img" aria-label="Exemplo de alerta de ociosidade">
+            <div><b>Ociosidade</b><span>exemplo</span></div>
+            <p>Motor ligado e parado por 47 min no talhão Serra 3. Cerca de 9 L de diesel sem produzir.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="resultados" class="secao" data-cena="resultados">
+        <div class="painel direita largo">
+          <p class="rotulo revela">04 / Resultados</p>
+          <h2 class="titulo revela">Números que fecham a safra.</h2>
+          <div class="numeros">
+            <div class="revela"><b>8,95</b><span>horas de motor</span></div>
+            <div class="revela"><b>155,8</b><span>litros de diesel</span></div>
+            <div class="revela"><b>36,55</b><span>hectares cobertos</span></div>
+            <div class="revela"><b>4,26</b><span>L/ha</span></div>
+          </div>
+          <p class="nota revela">
+            Uma operação real processada pela Serrano: um trator, um dia de plantio, R$ 1.026,98 em diesel.
+            Com isso vêm o R$/ha por talhão, a comparação entre safras e a exportação em CSV.
+          </p>
+        </div>
+      </section>
+
+      <section id="contato" class="secao contato" data-cena="contato">
+        <div class="painel largo">
+          <p class="rotulo revela">05 / Demonstração</p>
+          <h2 class="titulo revela">Leve a Serrano para a sua fazenda.</h2>
+          <p class="revela">Conte um pouco da operação. Respondemos em até um dia útil.</p>
+          <form id="form-contato" class="formulario revela" novalidate>
+            <label>Nome<input name="nome" required minlength="2" maxlength="120" autocomplete="name" /></label>
+            <label>E-mail<input name="email" type="email" required maxlength="254" autocomplete="email" /></label>
+            <label>Telefone / WhatsApp<input name="telefone" maxlength="40" autocomplete="tel" inputmode="tel" /></label>
+            <label>Fazenda ou empresa<input name="fazenda" maxlength="160" autocomplete="organization" /></label>
+            <label>Hectares<input name="hectares" type="number" min="0" inputmode="numeric" /></label>
+            <label>Máquinas<input name="maquinas" type="number" min="0" inputmode="numeric" /></label>
+            <label class="inteiro">Mensagem<textarea name="mensagem" rows="3" maxlength="2000"></textarea></label>
+            <label class="armadilha" aria-hidden="true">Site<input name="website" tabindex="-1" autocomplete="off" /></label>
+            <div class="inteiro envio">
+              <button class="pilula cheia grande" type="submit">Solicitar demonstração</button>
+              <p id="form-status" role="status"></p>
+            </div>
+          </form>
+        </div>
+        <footer class="rodape">
+          <span class="marca pequena">
+            <svg viewBox="0 0 64 44" aria-hidden="true"><path d="M3 41 17 15l10 17L39 7l22 34" /></svg>
+            <span>Serrano</span>
+          </span>
+          <span>Rio Grande do Sul, Brasil · © 2026</span>
+        </footer>
+      </section>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

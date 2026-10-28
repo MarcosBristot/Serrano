@@ -1,4 +1,4 @@
-# 🚜 Campero Sistemas — backend v1
+# 🚜 Serrano — backend v1
 
 > **Fim da cegueira multimarca no campo.** Plataforma SaaS que unifica a telemetria de frotas
 > agrícolas de diferentes fabricantes (pendrive do monitor) em métricas e alertas acionáveis.

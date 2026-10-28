@@ -23,6 +23,7 @@ from sistemacampero.interfaces.api.routers import (
     alertas,
     cadastro,
     conta,
+    contatos,
     equipe,
     exportacao,
     ingestao,
@@ -49,7 +50,7 @@ def create_app(
         container.fechar()
 
     app = FastAPI(
-        title="Sistema Campero API",
+        title="Serrano API",
         version=__version__,
         lifespan=ciclo_de_vida,
         docs_url="/docs",
@@ -63,6 +64,7 @@ def create_app(
         ProtecaoMiddleware,
         por_minuto=cfg.limite_por_minuto,
         uploads_por_minuto=cfg.limite_uploads_por_minuto,
+        contatos_por_minuto=cfg.limite_contatos_por_minuto,
         hsts=cfg.ambiente in ("staging", "prod"),
     )
     if cfg.cors_origens:
@@ -92,4 +94,5 @@ def create_app(
     app.include_router(alertas.router, prefix=PREFIXO)
     app.include_router(equipe.router, prefix=PREFIXO)
     app.include_router(exportacao.router, prefix=PREFIXO)
+    app.include_router(contatos.router, prefix=PREFIXO)
     return app

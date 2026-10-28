@@ -72,7 +72,7 @@ def csv_direto(
     corpo = s.csv(
         ctx.organizacao_id, tipo, _f(inicio, fim, maquina_id, talhao_id), padrao == "excel_br"
     )
-    nome = f"campero_{tipo}_{date.today().isoformat()}.csv"
+    nome = f"serrano_{tipo}_{date.today().isoformat()}.csv"
     return StreamingResponse(
         corpo,
         media_type="text/csv; charset=utf-8",
