@@ -259,6 +259,61 @@ export function texturaPlanta() {
   return t;
 }
 
+// ----------------------------------------------------------------- trigo maduro
+/** Touceira de trigo maduro: colmos, espigas com grãos e aristas. Fundo transparente. */
+export function texturaTrigo() {
+  const L = 256;
+  const A = 512;
+  const { c, g } = tela(L, A);
+  const rnd = aleatorio(23);
+  g.lineCap = "round";
+  for (let i = 0; i < 26; i++) {
+    const x0 = 20 + rnd() * (L - 40);
+    const alt = A * (0.62 + rnd() * 0.33);
+    const curva = (rnd() - 0.5) * 40;
+    const topoX = x0 + curva;
+    const topoY = A - alt;
+    const tom = 0.75 + rnd() * 0.35;
+    // colmo
+    g.strokeStyle = `rgb(${(178 * tom) | 0},${(132 * tom) | 0},${(58 * tom) | 0})`;
+    g.lineWidth = 2 + rnd() * 1.5;
+    g.beginPath();
+    g.moveTo(x0, A);
+    g.quadraticCurveTo(x0 + curva * 0.2, A - alt * 0.5, topoX, topoY + 60);
+    g.stroke();
+    // espiga: grãos alternados ao longo de ~60 px, inclinada
+    const ang = Math.atan2(curva, alt) + (rnd() - 0.5) * 0.3;
+    g.save();
+    g.translate(topoX, topoY + 62);
+    g.rotate(ang);
+    for (let k = 0; k < 15; k++) {
+      const y = -k * 4.1;
+      const afina = 1 - k / 22; // espiga afina na ponta
+      for (const lado of [-1, 1]) {
+        const gr = g.createRadialGradient(lado * 2, y, 0, lado * 2, y, 4.5);
+        gr.addColorStop(0, `rgb(${(246 * tom) | 0},${(204 * tom) | 0},${(112 * tom) | 0})`);
+        gr.addColorStop(1, `rgb(${(176 * tom) | 0},${(122 * tom) | 0},${(44 * tom) | 0})`);
+        g.fillStyle = gr;
+        g.beginPath();
+        g.ellipse(lado * 2.1 * afina, y, 2.3 * afina, 3.7, lado * 0.4, 0, Math.PI * 2);
+        g.fill();
+        // aristas
+        g.strokeStyle = `rgba(${(232 * tom) | 0},${(196 * tom) | 0},${(120 * tom) | 0},0.85)`;
+        g.lineWidth = 0.7;
+        g.beginPath();
+        g.moveTo(lado * 2.6, y - 2);
+        g.lineTo(lado * (7 + rnd() * 9), y - 34 - rnd() * 18);
+        g.stroke();
+      }
+    }
+    g.restore();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  return t;
+}
+
 // ----------------------------------------------------------------- trator
 /** Adesivo lateral do capô: aberturas de ventilação + marca. */
 export function texturaAdesivo() {
@@ -364,7 +419,9 @@ export function variarSolo(mat: THREE.MeshStandardMaterial) {
         float macro = vns(vMundoXZ * 0.03) * 0.6 + vns(vMundoXZ * 0.11) * 0.4;
         diffuseColor.rgb *= mix(0.72, 1.18, macro);
         // talhão já plantado à esquerda: palha mais escura e úmida
-        diffuseColor.rgb *= mix(1.0, 0.86, 1.0 - smoothstep(-2.9, -2.3, vMundoXZ.x));`,
+        diffuseColor.rgb *= mix(1.0, 0.86, 1.0 - smoothstep(-2.9, -2.3, vMundoXZ.x));
+        // trigal à direita: chão dourado entre os colmos (e ao longe, onde não há instâncias)
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.62, 0.43, 0.16) * mix(0.8, 1.1, macro), smoothstep(4.0, 5.0, vMundoXZ.x));`,
       );
   };
   mat.customProgramCacheKey = () => "solo-macro";
@@ -372,7 +429,7 @@ export function variarSolo(mat: THREE.MeshStandardMaterial) {
 }
 
 /** Balanço das folhas com o vento (plantas instanciadas). */
-export function balancar(mat: THREE.MeshStandardMaterial, tempo: { value: number }) {
+export function balancar<M extends THREE.Material>(mat: M, tempo: { value: number }, amplitude = 1): M {
   mat.onBeforeCompile = (s) => {
     s.uniforms.uTempo = tempo;
     s.vertexShader = s.vertexShader
@@ -382,10 +439,13 @@ export function balancar(mat: THREE.MeshStandardMaterial, tempo: { value: number
         `#include <begin_vertex>
         vec4 ipB = instanceMatrix[3];
         float topoB = uv.y * uv.y;
-        transformed.x += sin(uTempo * 1.9 + ipB.x * 0.7 + ipB.z * 0.45) * 0.07 * topoB;
-        transformed.z += cos(uTempo * 1.4 + ipB.z * 0.6) * 0.05 * topoB;`,
+        float ampB = ${amplitude.toFixed(2)};
+        // rajadas: uma onda larga atravessa a lavoura, como vento em trigal
+        float rajada = 0.6 + 0.4 * sin(uTempo * 0.9 - ipB.x * 0.08 - ipB.z * 0.05);
+        transformed.x += sin(uTempo * 1.9 + ipB.x * 0.7 + ipB.z * 0.45) * 0.07 * topoB * ampB * rajada;
+        transformed.z += cos(uTempo * 1.4 + ipB.z * 0.6) * 0.05 * topoB * ampB * rajada;`,
       );
   };
-  mat.customProgramCacheKey = () => "planta-vento";
+  mat.customProgramCacheKey = () => `planta-vento-${amplitude}`;
   return mat;
 }

@@ -53,7 +53,7 @@ main:focus { outline: none; }
 .vinheta {
   position: fixed; inset: 0; z-index: 1; pointer-events: none;
   background:
-    linear-gradient(90deg, rgba(10, 18, 12, 0.6) 0%, rgba(10, 18, 12, 0) 48%),
+    linear-gradient(90deg, rgba(10, 18, 12, 0.7) 0%, rgba(10, 18, 12, 0.25) 38%, rgba(10, 18, 12, 0) 55%),
     linear-gradient(0deg, rgba(10, 18, 12, 0.35) 0%, rgba(10, 18, 12, 0) 30%);
 }
 
@@ -129,7 +129,7 @@ main { position: relative; z-index: 2; }
   display: flex; align-items: center; gap: 10px; margin: 0 0 18px;
   font: 700 13px/1.2 var(--texto); letter-spacing: 0.16em; text-transform: uppercase; color: var(--terra);
 }
-.heroi .sobretitulo { color: var(--dourado-noite); }
+.heroi .sobretitulo { color: var(--dourado-noite); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7), 0 0 18px rgba(0, 0, 0, 0.55); }
 .espiga { flex: none; width: 14px; height: 22px; background: no-repeat center/contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 22'%3E%3Cg fill='%23b07d1c'%3E%3Cellipse cx='7' cy='3' rx='2.2' ry='3'/%3E%3Cellipse cx='4.2' cy='8' rx='2.2' ry='3' transform='rotate(-25 4.2 8)'/%3E%3Cellipse cx='9.8' cy='8' rx='2.2' ry='3' transform='rotate(25 9.8 8)'/%3E%3Cellipse cx='4.2' cy='13' rx='2.2' ry='3' transform='rotate(-25 4.2 13)'/%3E%3Cellipse cx='9.8' cy='13' rx='2.2' ry='3' transform='rotate(25 9.8 13)'/%3E%3C/g%3E%3Cpath d='M7 6v16' stroke='%23b07d1c' stroke-width='1.2'/%3E%3C/svg%3E"); }
 .titulo-xl {
   font: 700 clamp(48px, 8.8vw, 132px)/0.95 var(--serifa); letter-spacing: -0.02em;

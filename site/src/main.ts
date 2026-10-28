@@ -9,29 +9,35 @@ const menosMovimento = window.matchMedia("(prefers-reduced-motion: reduce)").mat
 
 // ----------------------------------------------------------------- quadros-chave por seção
 const BASE: Omit<Quadro, "dist" | "cam" | "alvo"> = {
-  elevacao: -6, azimute: 95, nevoa: 0x18202e, exposicao: 0.85, noite: 1, calor: 0, alerta: 0, trilha: 0,
+  elevacao: 20, azimute: 120, nevoa: 0xb8c2c8, exposicao: 0.55, noite: 0, calor: 0, alerta: 0, trilha: 0,
+  foco: 15, desfoque: 0.25, brilho: 0.3,
 };
 const QUADROS: Record<string, Quadro & { segura: number }> = {
-  inicio: { ...BASE, dist: 0, cam: [4.6, 2.1, -8.4], alvo: [3.4, 1.5, 0.5], segura: 0 },
+  // fim de tarde: câmera baixa no meio do trigo, sol rasante atrás da máquina
+  inicio: {
+    ...BASE, dist: 0, cam: [7.6, 1.32, -9.2], alvo: [3.1, 1.75, 2.4], elevacao: 6, azimute: 334, nevoa: 0xc98a4e,
+    exposicao: 0.5, noite: 0.08, foco: 11.6, desfoque: 0.8, brilho: 0.35, segura: 0,
+  },
   coleta: {
-    ...BASE, dist: 14, cam: [-8.5, 5.2, 9.5], alvo: [-3.8, 1.0, -2], elevacao: 9, azimute: 100, nevoa: 0xc9b29e,
-    exposicao: 0.72, noite: 0.1, trilha: 1, segura: 4,
+    ...BASE, dist: 14, cam: [-8.5, 5.2, 9.5], alvo: [-3.8, 1.0, -2], elevacao: 12, azimute: 100, nevoa: 0xd8c0a0,
+    exposicao: 0.66, trilha: 1, foco: 13.5, desfoque: 0.35, brilho: 0.45, segura: 4,
   },
   mapa: {
-    ...BASE, dist: 30, cam: [0.5, 44, 10], alvo: [0, 0, -2], elevacao: 26, azimute: 115, nevoa: 0xb3c0cc,
-    exposicao: 0.5, noite: 0, calor: 1, trilha: 0.6, segura: 1,
+    ...BASE, dist: 30, cam: [0.5, 44, 10], alvo: [0, 0, -2], elevacao: 28, azimute: 115, nevoa: 0xb3c0cc,
+    exposicao: 0.5, calor: 1, trilha: 0.6, foco: 45, desfoque: 0.18, brilho: 0.25, segura: 1,
   },
   alertas: {
-    ...BASE, dist: 35, cam: [7.5, 3.6, 2.2], alvo: [0, 1.3, 3.2], elevacao: 40, azimute: 135, nevoa: 0xbac6d0,
-    exposicao: 0.5, noite: 0, calor: 0, alerta: 1, trilha: 0.6, segura: 0,
+    ...BASE, dist: 35, cam: [7.5, 3.6, 2.2], alvo: [0, 1.3, 3.2], elevacao: 38, azimute: 135, nevoa: 0xbac6d0,
+    exposicao: 0.5, alerta: 1, trilha: 0.6, foco: 8.5, desfoque: 0.35, brilho: 0.35, segura: 0,
   },
   resultados: {
-    ...BASE, dist: 50, cam: [12, 6.5, 1], alvo: [0, 1, -5.5], elevacao: 52, azimute: 165, nevoa: 0xbfcad3,
-    exposicao: 0.48, noite: 0, trilha: 1, segura: 5,
+    ...BASE, dist: 50, cam: [12, 6.5, 1], alvo: [0, 1, -5.5], elevacao: 30, azimute: 165, nevoa: 0xc4c4bc,
+    exposicao: 0.52, trilha: 1, foco: 13.5, desfoque: 0.25, segura: 5,
   },
+  // pôr do sol à frente, faróis acesos
   contato: {
-    ...BASE, dist: 72, cam: [-3.5, 2.6, 13], alvo: [0, 1.8, -10], elevacao: 6, azimute: 200, nevoa: 0xd6a582,
-    exposicao: 0.72, noite: 0.05, trilha: 0.8, segura: 4,
+    ...BASE, dist: 72, cam: [-3.5, 2.6, 13], alvo: [0, 1.8, -10], elevacao: 2.5, azimute: 188, nevoa: 0xdc9a62,
+    exposicao: 0.8, noite: 0.25, trilha: 0.8, foco: 13, desfoque: 0.6, brilho: 0.85, segura: 4,
   },
 };
 
@@ -41,6 +47,7 @@ let cena: Cena | null = null;
 try {
   cena = new Cena(canvas);
   cena.semSuavizar = menosMovimento;
+  if (import.meta.env.DEV) Object.assign(window, { __cena: cena }); // depuração local
 } catch {
   // sem WebGL: a página continua legível sobre o fundo escuro
   canvas.remove();

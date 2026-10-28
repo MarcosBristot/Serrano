@@ -2,7 +2,8 @@
 import * as THREE from "three";
 import { Sky } from "three/examples/jsm/objects/Sky.js";
 
-import { aleatorio, balancar, FAIXA, fbm, texturaPlanta, texturaSolo, texturaSulcos, variarSolo } from "./texturas";
+import { PosProcessamento } from "./pos";
+import { aleatorio, balancar, FAIXA, fbm, texturaPlanta, texturaSolo, texturaSulcos, texturaTrigo, variarSolo } from "./texturas";
 import { criarTrator, type Trator } from "./trator";
 
 export interface Quadro {
@@ -17,9 +18,12 @@ export interface Quadro {
   calor: number; // 0..1: mapa de calor
   alerta: number; // 0..1: pulso de ociosidade
   trilha: number; // 0..1: camada de cobertura GPS
+  foco: number; // distância de foco da "lente" (m)
+  desfoque: number; // 0..1: força da profundidade de campo
+  brilho: number; // força do bloom (brilho do sol e dos faróis)
 }
 
-const NUMERICOS = ["dist", "elevacao", "azimute", "exposicao", "noite", "calor", "alerta", "trilha"] as const;
+const NUMERICOS = ["dist", "elevacao", "azimute", "exposicao", "noite", "calor", "alerta", "trilha", "foco", "desfoque", "brilho"] as const;
 const FIM_PLANTADEIRA = 3.45; // z (relativo ao trator) onde a faixa plantada começa
 const lerp = THREE.MathUtils.lerp;
 const suave = (t: number) => t * t * (3 - 2 * t);
@@ -101,6 +105,10 @@ function eucaliptos(): THREE.Group {
   fileira(50, -282, 50, 70);
   fileira(50, -285, -62, -285);
   fileira(-150, -150, -66, -150);
+  // capões e quebra-vento no horizonte, atrás do ponto de partida (silhueta contra o sol)
+  fileira(-170, 118, 160, 128);
+  fileira(-60, 175, 90, 190);
+  for (const [cx, cz] of [[-35, 96], [18, 102], [62, 92], [-95, 108]]) fileira(cx - 6, cz, cx + 6, cz + 3);
 
   const tronco = new THREE.CylinderGeometry(0.16, 0.3, 1, 6);
   tronco.translate(0, 0.5, 0);
@@ -300,10 +308,17 @@ export class Cena {
   private v = new THREE.Vector3();
   private m = new THREE.Matrix4();
   private cor = new THREE.Color();
+  private pos: PosProcessamento;
+  private trigo: THREE.MeshLambertMaterial;
+  private fpsMedio = 60;
+  private tempoMedindo = 0;
+  private nivelQualidade = 0; // 0 = cheio, 1 = resolução menor, 2 = sem desfoque/brilho
+  private escalaResolucao = 1;
+  private tamanho = { l: 1, a: 1 };
 
   constructor(canvas: HTMLCanvasElement) {
     const r = (this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" }));
-    r.setPixelRatio(Math.min(window.devicePixelRatio, 1.6));
+    r.setPixelRatio(Math.min(window.devicePixelRatio, 1.25)); // o pós-processamento já suaviza
     r.shadowMap.enabled = true;
     r.shadowMap.type = THREE.PCFSoftShadowMap;
     r.toneMapping = THREE.ACESFilmicToneMapping;
@@ -313,9 +328,9 @@ export class Cena {
     for (const s of [this.ceu, this.ceuAmbiente]) {
       s.scale.setScalar(1800);
       const u = s.material.uniforms;
-      u.turbidity.value = 4.5;
-      u.rayleigh.value = 1.4;
-      u.mieCoefficient.value = 0.004;
+      u.turbidity.value = 7.5; // bruma de verão: pôr do sol mais alaranjado
+      u.rayleigh.value = 2.2;
+      u.mieCoefficient.value = 0.006;
       u.mieDirectionalG.value = 0.85;
     }
     this.cenaAmbiente.add(this.ceuAmbiente);
@@ -361,7 +376,7 @@ export class Cena {
     const lavoura = new THREE.InstancedMesh(
       cruzado(),
       balancar(
-        new THREE.MeshStandardMaterial({ map: texturaPlanta(), alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.75 }),
+        new THREE.MeshLambertMaterial({ map: texturaPlanta(), alphaTest: 0.45, side: THREE.DoubleSide }),
         this.tempo,
       ),
       plantas.length,
@@ -372,6 +387,40 @@ export class Cena {
     });
     lavoura.receiveShadow = true;
     this.cena.add(lavoura);
+
+    // trigal maduro à direita (lavoura vizinha ainda por colher), a partir de x = 4,4 m
+    const rndT = aleatorio(31);
+    const touceiras: THREE.Matrix4[] = [];
+    for (let x = 4.4; x < 34; x += 0.34) {
+      for (let zt = 24; zt > -118; zt -= 0.34) {
+        const borda = Math.min(1, (x - 4.4) / 1.2); // touceiras mais baixas e ralas na borda
+        if (rndT() > 0.55 + 0.45 * borda) continue;
+        const s = (0.82 + rndT() * 0.28) * (0.75 + 0.25 * borda);
+        this.m.compose(
+          new THREE.Vector3(x + (rndT() - 0.5) * 0.3, 0, zt + (rndT() - 0.5) * 0.3),
+          new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rndT() * Math.PI),
+          new THREE.Vector3(s * 0.62, s, s * 0.62),
+        );
+        touceiras.push(this.m.clone());
+      }
+    }
+    const mapaTrigo = texturaTrigo();
+    this.trigo = balancar(
+      new THREE.MeshLambertMaterial({
+        map: mapaTrigo, alphaTest: 0.4, side: THREE.DoubleSide,
+        // luz que atravessa a palha contra o sol (brilho dourado de fim de tarde)
+        emissive: 0xffc36a, emissiveMap: mapaTrigo, emissiveIntensity: 0.25,
+      }),
+      this.tempo,
+      1.8,
+    );
+    const trigal = new THREE.InstancedMesh(cruzado(), this.trigo, touceiras.length);
+    touceiras.forEach((mm, i) => {
+      trigal.setMatrixAt(i, mm);
+      trigal.setColorAt(i, this.cor.setHSL(0.11 + rndT() * 0.03, 0.4, 0.82 + rndT() * 0.18));
+    });
+    trigal.receiveShadow = true;
+    this.cena.add(trigal);
 
     // faixa recém-plantada (sulcos + rastro dos pneus), cresce atrás da plantadeira
     const sulcos = texturaSulcos();
@@ -428,6 +477,8 @@ export class Cena {
     this.trator = criarTrator();
     this.cena.add(this.trator.grupo, this.poeira.pontos);
 
+    this.pos = new PosProcessamento(r, this.cena, this.camera);
+
     window.addEventListener("pointermove", (e) => {
       this.ponteiro.set(e.clientX / window.innerWidth - 0.5, e.clientY / window.innerHeight - 0.5);
     });
@@ -438,11 +489,38 @@ export class Cena {
   }
 
   redimensionar(l: number, a: number) {
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25) * this.escalaResolucao);
     this.renderer.setSize(l, a, false);
     this.camera.aspect = l / a;
     this.camera.fov = l / a < 0.8 ? 56 : 40; // telas estreitas: abre o campo de visão
     this.camera.updateProjectionMatrix();
     this.poeira.escala = a * this.renderer.getPixelRatio() * 0.9;
+    this.tamanho = { l, a };
+    this.pos.redimensionar(l, a, this.renderer.getPixelRatio());
+  }
+
+  /**
+   * Computador fraco, em degraus: primeiro renderiza em resolução menor (mantém o visual de foto);
+   * só se ainda ficar lento desliga desfoque e brilho. Cada degrau é medido por alguns segundos.
+   */
+  private ajustarQualidade(dt: number) {
+    if (this.nivelQualidade >= 2 || dt <= 0) return;
+    this.tempoMedindo += dt;
+    if (this.tempoMedindo < 3) return; // ignora o aquecimento (compilação de shaders, céu)
+    this.fpsMedio += (1 / dt - this.fpsMedio) * 0.03;
+    const limite = this.nivelQualidade === 0 ? 40 : 24;
+    if (this.tempoMedindo > 7 && this.fpsMedio < limite) {
+      this.nivelQualidade++;
+      if (this.nivelQualidade === 1) {
+        this.escalaResolucao = 0.75;
+      } else {
+        this.pos.dof.enabled = false;
+        this.pos.bloom.enabled = false;
+      }
+      this.redimensionar(this.tamanho.l, this.tamanho.a);
+      this.tempoMedindo = 0;
+      this.fpsMedio = 60;
+    }
   }
 
   private amostrar(p: number): Quadro {
@@ -467,7 +545,7 @@ export class Cena {
   /** Céu físico + mapa de ambiente (reflexos) quando o sol anda o bastante. */
   private atualizarCeu(dirSol: THREE.Vector3, agora: number) {
     this.ceu.material.uniforms.sunPosition.value.copy(dirSol);
-    if (dirSol.distanceTo(this.ultimoSol) > 0.02 && agora - this.ultimoAmbiente > 0.25) {
+    if (dirSol.distanceTo(this.ultimoSol) > 0.04 && agora - this.ultimoAmbiente > 0.6) {
       this.ceuAmbiente.material.uniforms.sunPosition.value.copy(dirSol);
       const novo = this.pmrem.fromScene(this.cenaAmbiente, 0, 0.1, 4000);
       this.ambiente?.dispose();
@@ -571,6 +649,16 @@ export class Cena {
     this.camera.lookAt(this.alvoCam);
     this.iniciada = true;
 
-    this.renderer.render(this.cena, this.camera);
+    // lente: foco, desfoque, brilho e calor da luz
+    const u = this.pos.dof.material.uniforms;
+    u.uFoco.value = q.foco;
+    u.uForca.value = q.desfoque;
+    this.pos.bloom.strength = q.brilho;
+    this.pos.grade.uniforms.uTempo.value = agora;
+    this.pos.grade.uniforms.uQuente.value = THREE.MathUtils.clamp(1 - q.elevacao / 35, 0.15, 0.9);
+    this.trigo.emissiveIntensity = 0.1 + 0.55 * THREE.MathUtils.clamp(1 - q.elevacao / 25, 0, 1);
+
+    this.pos.composer.render(dt);
+    this.ajustarQualidade(dt);
   }
 }
