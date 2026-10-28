@@ -295,6 +295,8 @@ export class Cena {
   private ponteiro = new THREE.Vector2();
   private alvoCam = new THREE.Vector3();
   private iniciada = false;
+  /** com "reduzir movimento" a câmera vai direto ao quadro, sem deslizar */
+  semSuavizar = false;
   private v = new THREE.Vector3();
   private m = new THREE.Matrix4();
   private cor = new THREE.Color();
@@ -563,7 +565,7 @@ export class Cena {
 
     // câmera com leve paralaxe do mouse e amortecimento
     this.v.set(q.cam[0] + this.ponteiro.x * 1.2, q.cam[1] - this.ponteiro.y * 0.6, z + q.cam[2]);
-    const k = this.iniciada ? 1 - Math.exp(-dt * 6) : 1;
+    const k = this.iniciada && !this.semSuavizar ? 1 - Math.exp(-dt * 6) : 1;
     this.camera.position.lerp(this.v, k);
     this.alvoCam.lerp(this.v.set(q.alvo[0], q.alvo[1], z + q.alvo[2]), k);
     this.camera.lookAt(this.alvoCam);

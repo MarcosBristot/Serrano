@@ -1,5 +1,6 @@
-import "./estilo.css";
+import "./base";
 
+import empresa from "../empresa.json";
 import { Cena, type Quadro } from "./cena";
 
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:8000/api/v1";
@@ -39,6 +40,7 @@ const secoes = [...document.querySelectorAll<HTMLElement>("[data-cena]")];
 let cena: Cena | null = null;
 try {
   cena = new Cena(canvas);
+  cena.semSuavizar = menosMovimento;
 } catch {
   // sem WebGL: a página continua legível sobre o fundo escuro
   canvas.remove();
@@ -116,18 +118,37 @@ requestAnimationFrame(quadro);
 
 // ----------------------------------------------------------------- topo, trilho e revelações
 const topo = document.querySelector(".topo")!;
-const pontos = [...document.querySelectorAll<HTMLElement>(".trilho li")];
+const pontos = [...document.querySelectorAll<HTMLAnchorElement>(".trilho a")];
 const marcarAtiva = () => {
   topo.classList.toggle("rolado", window.scrollY > 40);
   const meio = window.scrollY + window.innerHeight / 2;
   let ativa = secoes[0].id;
   for (const s of secoes) if (s.offsetTop <= meio) ativa = s.id;
-  pontos.forEach((p) => p.classList.toggle("ativo", p.dataset.alvo === ativa));
+  pontos.forEach((p) => {
+    p.classList.toggle("ativo", p.dataset.alvo === ativa);
+    if (p.dataset.alvo === ativa) p.setAttribute("aria-current", "true");
+    else p.removeAttribute("aria-current");
+  });
   document.body.classList.toggle("no-contato", ativa === "contato");
 };
 window.addEventListener("scroll", marcarAtiva, { passive: true });
 marcarAtiva();
-pontos.forEach((p) => p.addEventListener("click", () => document.getElementById(p.dataset.alvo!)?.scrollIntoView()));
+
+// menu em telas pequenas: botão com aria-expanded, fecha com Esc e ao escolher um item
+const botaoMenu = document.querySelector<HTMLButtonElement>(".menu-botao")!;
+const menu = document.querySelector<HTMLElement>("#menu")!;
+const alternarMenu = (abrir: boolean) => {
+  menu.classList.toggle("aberto", abrir);
+  botaoMenu.setAttribute("aria-expanded", String(abrir));
+};
+botaoMenu.addEventListener("click", () => alternarMenu(!menu.classList.contains("aberto")));
+menu.addEventListener("click", (e) => (e.target as HTMLElement).closest("a") && alternarMenu(false));
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && menu.classList.contains("aberto")) {
+    alternarMenu(false);
+    botaoMenu.focus();
+  }
+});
 
 const observador = new IntersectionObserver(
   (itens) => {
@@ -149,13 +170,29 @@ document.querySelectorAll<HTMLAnchorElement>("[data-app]").forEach((a) => (a.hre
 // ----------------------------------------------------------------- formulário de demonstração
 const form = document.querySelector<HTMLFormElement>("#form-contato")!;
 const status = document.querySelector<HTMLElement>("#form-status")!;
+
+/** Erros em texto ao lado do campo (lidos pelo leitor de tela) e foco no primeiro inválido. */
+function validar(): boolean {
+  const regras: [string, string, (v: string) => boolean][] = [
+    ["f-nome", "Informe seu nome (pelo menos 2 letras).", (v) => v.trim().length >= 2],
+    ["f-email", "Informe um e-mail válido, como nome@fazenda.com.br.", (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim())],
+  ];
+  let primeiro: HTMLInputElement | null = null;
+  for (const [id, msg, ok] of regras) {
+    const campo = document.getElementById(id) as HTMLInputElement;
+    const erro = document.getElementById(campo.getAttribute("aria-describedby")!)!;
+    const valido = ok(campo.value);
+    campo.setAttribute("aria-invalid", String(!valido));
+    erro.textContent = valido ? "" : msg;
+    if (!valido && !primeiro) primeiro = campo;
+  }
+  primeiro?.focus();
+  return !primeiro;
+}
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   status.className = "";
-  if (!form.checkValidity()) {
-    form.reportValidity();
-    return;
-  }
+  if (!validar()) return;
   const dados = new FormData(form);
   const texto = (k: string) => String(dados.get(k) ?? "").trim() || null;
   const inteiro = (k: string) => (texto(k) === null ? null : Number(texto(k)));
@@ -168,6 +205,8 @@ form.addEventListener("submit", async (e) => {
     maquinas: inteiro("maquinas"),
     mensagem: texto("mensagem"),
     website: texto("website"),
+    aceita_novidades: dados.get("aceita_novidades") === "on",
+    politica_versao: empresa.versaoDocumentos,
     origem: "site",
   };
   const botao = form.querySelector<HTMLButtonElement>("button[type=submit]")!;
@@ -186,7 +225,7 @@ form.addEventListener("submit", async (e) => {
     }
     form.reset();
     status.className = "ok";
-    status.textContent = "Recebido! Entramos em contato em breve.";
+    status.textContent = "Pedido recebido. Vamos responder pelo e-mail informado.";
   } catch (erro) {
     status.className = "erro";
     status.textContent = erro instanceof TypeError ? "Sem conexão com o servidor. Tente de novo." : (erro as Error).message;

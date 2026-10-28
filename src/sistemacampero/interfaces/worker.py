@@ -168,6 +168,7 @@ def main() -> int:
     configurar_logs(settings.log_level, settings.log_json)
     c = construir(settings)
     assert c.fila is not None and c.executor is not None
+    contatos = c.contatos
     worker = Worker(
         c.fila,
         c.executor,
@@ -178,6 +179,11 @@ def main() -> int:
         periodicas=[
             *([c.notificacoes.enviar_pendentes] if c.notificacoes else []),
             *([_a_cada(3600, c.exportacao.limpar_vencidas)] if c.exportacao else []),
+            *(
+                [_a_cada(86400, lambda: contatos.expurgar(settings.retencao_contatos_meses))]
+                if contatos
+                else []
+            ),
         ],
     )
     parar = threading.Event()

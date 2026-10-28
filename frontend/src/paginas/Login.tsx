@@ -3,6 +3,7 @@ import { ArrowRight, Fuel, Map, Sprout } from "lucide-react";
 import { useState } from "react";
 
 import { Marca } from "../componentes/Marca";
+import { LINKS_LEGAIS } from "../lib/legal";
 import { configuracaoOk, supabase } from "../lib/supabase";
 
 export default function Login() {
@@ -49,7 +50,7 @@ export default function Login() {
             ))}
           </div>
         </div>
-        <div className="text-xs text-folha-100/50">Passo Fundo · RS</div>
+        <div className="text-xs text-folha-100/70">Rio Grande do Sul</div>
       </section>
 
       <section className="flex items-center justify-center px-6 py-12">
@@ -92,6 +93,10 @@ export default function Login() {
           <button type="button" onClick={recuperar} className="mt-4 w-full text-center text-sm font-medium text-folha-700 hover:underline">
             Esqueci minha senha
           </button>
+          <p className="mt-8 text-center text-xs text-folha-900/60">
+            <a className="underline" href={LINKS_LEGAIS.termos}>Termos de Serviço</a> ·{" "}
+            <a className="underline" href={LINKS_LEGAIS.privacidade}>Política de Privacidade</a>
+          </p>
         </form>
       </section>
     </div>

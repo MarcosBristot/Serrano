@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from sistemacampero.interfaces.worker import Worker
+from tests.conftest import ACEITE
 from tests.integracao.apoio import Conn, drenar, um, upload, zipar
 from tests.sinteticos.gen4 import gjson_boundary, masterdata_xml
 from tests.sinteticos.jdl_builder import START_MS, Cenario
@@ -285,6 +286,6 @@ def test_kpis_isolados_por_organizacao(
     drenar(worker)
     uid = criar_usuario(admin)
     h = {"Authorization": f"Bearer {emitir_token(uid)}"}
-    client.post("/api/v1/organizacoes", json={"nome": "Vizinha Kpi"}, headers=h)
+    client.post("/api/v1/organizacoes", json={"nome": "Vizinha Kpi", **ACEITE}, headers=h)
     assert client.get("/api/v1/kpis/resumo", headers=h).json()["sessoes"] == 0
     assert client.get("/api/v1/telemetry/machine/SINTETICO0001", headers=h).status_code == 404

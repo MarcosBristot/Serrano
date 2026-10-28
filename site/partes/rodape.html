@@ -1,0 +1,56 @@
+<footer class="rodape" id="rodape">
+  <div class="rodape-grade">
+    <div class="rodape-marca">
+      <a href="/" class="marca" aria-label="Serrano, página inicial">
+        <svg viewBox="0 0 64 44" aria-hidden="true" focusable="false"><path d="M3 41 17 15l10 17L39 7l22 34" /></svg>
+        <span>Serrano</span>
+      </a>
+      <p>Gestão de máquinas agrícolas a partir dos dados do monitor do trator.</p>
+    </div>
+
+    <nav aria-label="Site">
+      <h2>Site</h2>
+      <ul>
+        <li><a href="/#coleta">Como funciona</a></li>
+        <li><a href="/#mapa">Mapa de calor</a></li>
+        <li><a href="/#alertas">Alertas</a></li>
+        <li><a href="/#contato">Agendar demonstração</a></li>
+      </ul>
+    </nav>
+
+    <nav aria-label="Documentos legais">
+      <h2>Legal</h2>
+      <ul>
+        <li><a href="/privacidade.html">Política de Privacidade</a></li>
+        <li><a href="/privacidade.html#cookies">Cookies</a></li>
+        <li><a href="/termos.html">Termos de Serviço</a></li>
+        <li><a href="/reembolso.html">Cancelamento e reembolso</a></li>
+        <li><a href="/acessibilidade.html">Acessibilidade</a></li>
+        <li><button type="button" class="link" data-preferencias-cookies>Preferências de cookies</button></li>
+      </ul>
+    </nav>
+
+    <div>
+      <h2>Empresa</h2>
+      <address>
+        {{razaoSocial}}<br />
+        CNPJ {{cnpj}}<br />
+        {{endereco}}<br />
+        {{cidadeUf}}<br />
+        <a href="mailto:{{emailContato}}">{{emailContato}}</a>
+      </address>
+      <p class="rodape-dpo">
+        Encarregado de dados (LGPD): {{encarregado}} ·
+        <a href="mailto:{{emailPrivacidade}}">{{emailPrivacidade}}</a>
+      </p>
+    </div>
+  </div>
+
+  <div class="rodape-fim">
+    <p>© 2026 {{razaoSocial}}. Todos os direitos reservados.</p>
+    <p>
+      Cena 3D, ilustrações e marca criadas pela Serrano. <a href="/termos.html#creditos">Créditos e licenças</a>.
+      John Deere é marca de Deere &amp; Company; a Serrano não tem vínculo com a fabricante.
+    </p>
+  </div>
+</footer>

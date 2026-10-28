@@ -63,6 +63,7 @@ class Settings(BaseSettings):
     limite_por_minuto: int = Field(default=600, ge=10)
     limite_uploads_por_minuto: int = Field(default=120, ge=1)
     limite_contatos_por_minuto: int = Field(default=5, ge=1)
+    retencao_contatos_meses: int = Field(default=12, ge=1, le=60)
 
     cors_origens: list[str] = Field(default_factory=list)
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
