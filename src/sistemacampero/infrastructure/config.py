@@ -64,6 +64,9 @@ class Settings(BaseSettings):
     limite_uploads_por_minuto: int = Field(default=120, ge=1)
     limite_contatos_por_minuto: int = Field(default=5, ge=1)
     retencao_contatos_meses: int = Field(default=12, ge=1, le=60)
+    # Marco Civil, art. 15: no mínimo 6 meses
+    retencao_acessos_meses: int = Field(default=6, ge=6, le=24)
+    carencia_exclusao_dias: int = Field(default=7, ge=0, le=30)
 
     cors_origens: list[str] = Field(default_factory=list)
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"

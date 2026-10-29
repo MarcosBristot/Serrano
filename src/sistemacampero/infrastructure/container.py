@@ -12,6 +12,7 @@ from sistemacampero.application.ingestao import ExecutorDeJobs, ServicoIngestao
 from sistemacampero.application.kpis import ServicoKpis
 from sistemacampero.application.processamento import ProcessadorDeArquivo
 from sistemacampero.application.tenancy import ServicoTenancy
+from sistemacampero.application.titular import ServicoTitular
 from sistemacampero.domain.ingestao import TipoJob
 from sistemacampero.domain.ports import Armazenamento, VerificadorDeProntidao, VerificadorDeToken
 from sistemacampero.domain.services.rules import ConfigRegras
@@ -34,6 +35,7 @@ from sistemacampero.infrastructure.persistence.organizacoes import (
     PostgresRepositorioOrganizacoes,
 )
 from sistemacampero.infrastructure.persistence.resultados import PostgresRepositorioResultados
+from sistemacampero.infrastructure.persistence.titular import PostgresTitular, RegistrosDeAcesso
 from sistemacampero.infrastructure.security.jwt import (
     CacheJwks,
     VerificadorJwtSupabase,
@@ -83,6 +85,8 @@ class Container:
     repo_exportacao: PostgresExportacoes | None = None
     contatos: PostgresContatos | None = None
     aceites: PostgresAceites | None = None
+    titular: ServicoTitular | None = None
+    acessos: RegistrosDeAcesso | None = None
     exportacao: ServicoExportacao | None = None
     db: Database | None = None
 
@@ -180,6 +184,8 @@ def construir(settings: Settings, storage: Armazenamento | None = None) -> Conta
         exportacao=exportacao,
         contatos=PostgresContatos(db),
         aceites=PostgresAceites(db),
+        titular=ServicoTitular(PostgresTitular(db), storage, settings.carencia_exclusao_dias),
+        acessos=RegistrosDeAcesso(db),
         equipe=ServicoEquipe(repo_equipe, notificador.convite if smtp else None),
         db=db,
     )

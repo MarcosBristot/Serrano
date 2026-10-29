@@ -61,7 +61,7 @@ def main() -> int:
         print("Ao criar a organização você aceita os Termos de Serviço e a Política de Privacidade.")
         org = api.post(
             "/organizacoes",
-            json={"nome": nome, "aceite_termos": True, "versao_documentos": "2026-10-28"},
+            json={"nome": nome, "aceite_termos": True, "versao_documentos": "2026-10-29"},
         )
         print("organização criada:", org.status_code, org.json().get("slug") or org.json())
 

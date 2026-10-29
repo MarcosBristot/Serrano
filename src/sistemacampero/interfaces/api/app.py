@@ -6,9 +6,13 @@ Nos testes, injete um ``Container`` com dublês.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
+import logging
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 
+import anyio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -16,6 +20,7 @@ from sistemacampero import __version__
 from sistemacampero.infrastructure.config import Settings
 from sistemacampero.infrastructure.container import Container, construir
 from sistemacampero.infrastructure.logging_config import configurar_logs
+from sistemacampero.infrastructure.persistence.titular import RegistrosDeAcesso
 from sistemacampero.interfaces.api import errors
 from sistemacampero.interfaces.api.middleware import Metricas, RequestContextMiddleware
 from sistemacampero.interfaces.api.protecao import ProtecaoMiddleware
@@ -29,9 +34,21 @@ from sistemacampero.interfaces.api.routers import (
     ingestao,
     kpis,
     saude,
+    titular,
 )
 
 PREFIXO = "/api/v1"
+logger = logging.getLogger(__name__)
+
+
+async def _gravar_acessos(acessos: RegistrosDeAcesso, intervalo_s: float = 5.0) -> None:
+    """Grava em lote os registros de acesso enfileirados pelo middleware."""
+    while True:
+        await asyncio.sleep(intervalo_s)
+        try:
+            await anyio.to_thread.run_sync(acessos.gravar_pendentes)
+        except Exception:
+            logger.exception("falha ao gravar registros de acesso (nova tentativa em seguida)")
 
 
 def create_app(
@@ -46,7 +63,13 @@ def create_app(
 
     @asynccontextmanager
     async def ciclo_de_vida(_: FastAPI) -> AsyncIterator[None]:
+        acessos = container.acessos
+        tarefa = asyncio.create_task(_gravar_acessos(acessos)) if acessos else None
         yield
+        if tarefa is not None and acessos is not None:
+            tarefa.cancel()
+            with contextlib.suppress(Exception):
+                await anyio.to_thread.run_sync(acessos.gravar_pendentes)
         container.fechar()
 
     app = FastAPI(
@@ -80,6 +103,7 @@ def create_app(
         RequestContextMiddleware,
         metricas=app.state.metricas,
         auditar=container.repo_equipe.auditar if container.repo_equipe else None,
+        registrar_acesso=container.acessos.registrar if container.acessos else None,
     )
 
     app.include_router(saude.router)  # /health, /ready e /metrics na raiz (healthcheck)
@@ -95,4 +119,5 @@ def create_app(
     app.include_router(equipe.router, prefix=PREFIXO)
     app.include_router(exportacao.router, prefix=PREFIXO)
     app.include_router(contatos.router, prefix=PREFIXO)
+    app.include_router(titular.router, prefix=PREFIXO)
     return app

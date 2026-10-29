@@ -1,6 +1,6 @@
 # Conformidade e riscos jurídicos — site e plataforma Serrano
 
-Documento interno (não publicar). Atualizado em 28/10/2026, junto com a versão `2026-10-28` dos documentos legais.
+Documento interno (não publicar). Atualizado em 29/10/2026, junto com a versão `2026-10-29` dos documentos legais.
 
 > Os textos legais foram redigidos como **minuta técnica**, a partir do que o sistema faz hoje. Antes de publicar,
 > peça a revisão de um advogado (LGPD e consumidor). Este documento não é parecer jurídico.
@@ -50,10 +50,10 @@ Documento interno (não publicar). Atualizado em 28/10/2026, junto com a versão
 | Risco | Gravidade | O que fazer |
 |---|---|---|
 | Publicar com dados da empresa em branco (CDC art. 31; Decreto 7.962/2013 exige identificação de quem vende on-line) | Alta | Preencher `empresa.json` antes do deploy |
-| **Marco Civil, art. 15**: provedor de aplicação deve guardar registros de acesso (IP, data e hora) por 6 meses, em sigilo. Hoje a API só escreve logs no console da hospedagem | Alta | Configurar retenção de logs de 6 meses na hospedagem ou gravar o acesso numa tabela com expurgo |
+| ~~Marco Civil, art. 15~~ **feito**: cada chamada à API grava data, hora, IP, rota e usuário em `interno.registros_acesso` (em lote, a cada 5 s), com expurgo após `RETENCAO_ACESSOS_MESES` (6, mínimo legal) | — | Em produção atrás de proxy, confirmar que o IP real chega (a API já usa `proxy_headers`); acesso à tabela só pelo backend |
 | Transferência internacional (Supabase no Canadá; hospedagem possivelmente nos EUA) | Média | DPA com cláusulas-padrão da ANPD. Avaliar mover o banco para São Paulo, o que já estava no plano do piloto |
 | Dados de operadores (nome, localização GPS das operações) | Média | A política e os Termos já põem o cliente como controlador. Pôr no contrato comercial o dever do cliente de informar os operadores |
-| Direitos do titular sem ferramenta (exportar ou apagar a conta) | Média | Hoje o atendimento é manual pelo e-mail do DPO (prazo de 15 dias). Criar no painel “exportar meus dados” e “excluir conta” |
+| ~~Direitos do titular sem ferramenta~~ **feito**: no painel, Configurações → Privacidade e meus dados: exportação em JSON e exclusão da conta com 7 dias de carência (`CARENCIA_EXCLUSAO_DIAS`), executada pelo worker | — | Correção, anonimização e informação sobre compartilhamento continuam pelo e-mail do DPO |
 | Pedidos de demonstração e direito de oposição | Baixa | Atender por e-mail; expurgo automático em 12 meses já ativo |
 | Uso da marca John Deere | Baixa | Uso nominativo só para indicar compatibilidade, com aviso de não afiliação (feito). Não usar logo nem as cores da marca |
 | Imagens de satélite Esri no painel | Baixa | Atribuição exibida no mapa. Conferir os termos da Esri para uso comercial e volume; se preciso, contratar um plano ou trocar de provedor |
