@@ -51,7 +51,7 @@ def test_exclusao_com_carencia_cancela_e_executa(
     client: TestClient, org: dict[str, Any], admin: Conn, container: Container
 ) -> None:
     h = org["auth"]
-    upload(client, org, construir_jdl(Cenario()))
+    upload(client, org, construir_jdl(Cenario(minutos=10)))
     caminho = um(
         admin,
         "select caminho_storage from public.arquivos_brutos where organizacao_id = %s",
