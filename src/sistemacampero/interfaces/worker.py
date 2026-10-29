@@ -169,6 +169,8 @@ def main() -> int:
     c = construir(settings)
     assert c.fila is not None and c.executor is not None
     contatos = c.contatos
+    acessos = c.acessos
+    titular = c.titular
     worker = Worker(
         c.fila,
         c.executor,
@@ -184,6 +186,12 @@ def main() -> int:
                 if contatos
                 else []
             ),
+            *(
+                [_a_cada(86400, lambda: acessos.expurgar(settings.retencao_acessos_meses))]
+                if acessos
+                else []
+            ),
+            *([_a_cada(3600, titular.executar_vencidas)] if titular else []),
         ],
     )
     parar = threading.Event()

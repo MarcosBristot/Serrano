@@ -3,6 +3,7 @@ import { Fuel, SlidersHorizontal, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Cabecalho, Carregando, Erro, Selo } from "../componentes/ui";
+import { MeusDados } from "../componentes/MeusDados";
 import { useSessao } from "../contextos/Sessao";
 import { api } from "../lib/api";
 import { data, rs } from "../lib/formato";
@@ -12,11 +13,12 @@ export default function Configuracoes() {
   const { papel } = useSessao();
   return (
     <>
-      <Cabecalho titulo="Configurações" sub="Preço do diesel, limites dos alertas e equipe." />
+      <Cabecalho titulo="Configurações" sub="Preço do diesel, limites dos alertas, equipe e privacidade." />
       <div className="grid gap-6 xl:grid-cols-2">
         <PrecoDiesel podeEditar={papel !== "leitor"} />
         <Regras podeEditar={papel !== "leitor"} />
         <Equipe podeAdministrar={papel === "owner"} />
+        <MeusDados />
       </div>
     </>
   );

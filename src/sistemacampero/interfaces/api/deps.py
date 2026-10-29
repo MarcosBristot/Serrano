@@ -24,12 +24,14 @@ ContainerDep = Annotated[Container, Depends(container)]
 
 
 def principal(
+    request: Request,
     c: ContainerDep,
     credenciais: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
 ) -> Principal:
     if credenciais is None or credenciais.scheme.lower() != "bearer":
         raise NaoAutenticado("Envie 'Authorization: Bearer <token>'.")
     usuario_id, email = c.verificador_token.verificar(credenciais.credentials)
+    request.state.usuario_id = usuario_id  # registro de acesso (Marco Civil)
     return Principal(usuario_id=usuario_id, email=email)
 
 
@@ -53,7 +55,7 @@ def organizacao(
         assert c.equipe is not None
         ctx = c.equipe.autenticar_chave(chave)
     else:
-        quem = principal(c, credenciais)
+        quem = principal(request, c, credenciais)
         org_id: UUID | None = None
         if x_organizacao_id:
             try:
