@@ -88,7 +88,15 @@ def recalcular_diarias(
     return conn.execute(
         """
         with pts as (
-            select (t.ts at time zone %(fuso)s)::date as dia, t.talhao_id, s.operacao, t.sessao_id,
+            select (t.ts at time zone %(fuso)s)::date as dia,
+                -- manual vale para tudo; o talhão do monitor cobre pontos fora de contornos
+                -- conhecidos; localizado por GPS reparte ponto a ponto.
+                case s.talhao_origem
+                    when 'manual' then s.talhao_id
+                    when 'monitor' then coalesce(t.talhao_id, s.talhao_id)
+                    else t.talhao_id
+                end as talhao_id,
+                s.operacao, t.sessao_id,
                 count(*) filter (where t.engine_on) as motor_s,
                 count(*) filter (where t.engine_on and t.speed_kmh >= 1) as trabalho_s,
                 count(*) filter (where t.engine_on and t.speed_kmh < 1) as ocioso_s,

@@ -108,6 +108,17 @@ def test_sessao_em_dois_talhoes_reparte_por_talhao_do_ponto(
     ranking = _kpi(client, org, "kpis/ranking", por="talhao")
     assert {r["nome"] for r in ranking} == {"Talhao Teste", "(sem talhão)"}
 
+    # Correção manual: a operação inteira passa para o talhão escolhido, inclusive no ranking.
+    novo = client.post("/api/v1/talhoes", json={"nome": "Corrigido"}, headers=org["auth"]).json()
+    sessao = client.get("/api/v1/sessions", headers=org["auth"]).json()["itens"][0]["id"]
+    r = client.patch(
+        f"/api/v1/sessions/{sessao}", json={"talhao_id": novo["id"]}, headers=org["auth"]
+    )
+    assert r.status_code == 200, r.text
+    drenar(worker)
+    assert {x["talhao"] for x in _diarias(admin, org)} == {"Corrigido"}
+    assert {r["nome"] for r in _kpi(client, org, "kpis/ranking", por="talhao")} == {"Corrigido"}
+
 
 def test_resumo_custo_e_preco_do_combustivel(
     client: TestClient, worker: Worker, org: dict[str, Any]
