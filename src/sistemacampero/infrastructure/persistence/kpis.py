@@ -1,6 +1,6 @@
 """Consultas de KPIs, métricas diárias, mapas e rotas legadas.
 
-``metricas_diarias`` é recalculada a partir da telemetria (1 Hz) por dia LOCAL (fuso da
+``metricas_diarias`` é recalculada a partir da telemetria (janelas com ``peso_s``) por dia LOCAL (fuso da
 organização), máquina, talhão de CADA PONTO e operação. Assim uma sessão que atravessa
 meia-noite ou dois talhões é repartida corretamente. A área da sessão (cobertura, ou
 estimada sem GPS) é repartida pela distância trabalhada em cada parte.
@@ -97,15 +97,15 @@ def recalcular_diarias(
                     else t.talhao_id
                 end as talhao_id,
                 s.operacao, t.sessao_id,
-                count(*) filter (where t.engine_on) as motor_s,
-                count(*) filter (where t.engine_on and t.speed_kmh >= 1) as trabalho_s,
-                count(*) filter (where t.engine_on and t.speed_kmh < 1) as ocioso_s,
-                coalesce(sum(t.fuel_rate_lph) filter (where t.engine_on), 0) / 3600 as litros,
-                coalesce(sum(t.fuel_rate_lph) filter (where t.engine_on and t.speed_kmh >= 1), 0)
+                coalesce(sum(t.peso_s) filter (where t.engine_on), 0) as motor_s,
+                coalesce(sum(t.peso_s) filter (where t.engine_on and t.speed_kmh >= 1), 0) as trabalho_s,
+                coalesce(sum(t.peso_s) filter (where t.engine_on and t.speed_kmh < 1), 0) as ocioso_s,
+                coalesce(sum(t.fuel_rate_lph * t.peso_s) filter (where t.engine_on), 0) / 3600 as litros,
+                coalesce(sum(t.fuel_rate_lph * t.peso_s) filter (where t.engine_on and t.speed_kmh >= 1), 0)
                     / 3600 as litros_trabalho,
-                coalesce(sum(t.fuel_rate_lph) filter (where t.engine_on and t.speed_kmh < 1), 0)
+                coalesce(sum(t.fuel_rate_lph * t.peso_s) filter (where t.engine_on and t.speed_kmh < 1), 0)
                     / 3600 as litros_ocioso,
-                coalesce(sum(t.speed_kmh) filter (where t.engine_on and t.speed_kmh >= 1), 0)
+                coalesce(sum(t.speed_kmh * t.peso_s) filter (where t.engine_on and t.speed_kmh >= 1), 0)
                     / 3600 as distancia_km
             from public.telemetria t
             join public.sessoes_trabalho s on s.id = t.sessao_id
@@ -199,18 +199,18 @@ class PostgresConsultasKpi:
             return conn.execute(
                 f"""
                 select date_trunc('hour', t.ts at time zone o.fuso) as periodo,
-                    count(*) filter (where t.engine_on) / 3600.0 as motor_h,
-                    count(*) filter (where t.engine_on and t.speed_kmh >= 1) / 3600.0 as trabalho_h,
-                    count(*) filter (where t.engine_on and t.speed_kmh < 1) / 3600.0 as ocioso_h,
-                    coalesce(sum(t.fuel_rate_lph) filter (where t.engine_on), 0) / 3600 as litros,
-                    coalesce(sum(t.fuel_rate_lph)
+                    coalesce(sum(t.peso_s) filter (where t.engine_on), 0) / 3600.0 as motor_h,
+                    coalesce(sum(t.peso_s) filter (where t.engine_on and t.speed_kmh >= 1), 0) / 3600.0 as trabalho_h,
+                    coalesce(sum(t.peso_s) filter (where t.engine_on and t.speed_kmh < 1), 0) / 3600.0 as ocioso_h,
+                    coalesce(sum(t.fuel_rate_lph * t.peso_s) filter (where t.engine_on), 0) / 3600 as litros,
+                    coalesce(sum(t.fuel_rate_lph * t.peso_s)
                         filter (where t.engine_on and t.speed_kmh >= 1), 0)
                         / 3600 as litros_trabalho,
-                    coalesce(sum(t.fuel_rate_lph)
+                    coalesce(sum(t.fuel_rate_lph * t.peso_s)
                         filter (where t.engine_on and t.speed_kmh < 1), 0) / 3600 as litros_ocioso,
-                    coalesce(sum(t.speed_kmh / 3.6 * i.largura_m)
+                    coalesce(sum(t.speed_kmh / 3.6 * i.largura_m * t.peso_s)
                         filter (where t.engine_on and t.speed_kmh >= 1), 0) / 10000 as area_ha,
-                    coalesce(sum(t.speed_kmh) filter (where t.engine_on and t.speed_kmh >= 1), 0)
+                    coalesce(sum(t.speed_kmh * t.peso_s) filter (where t.engine_on and t.speed_kmh >= 1), 0)
                         / 3600 as distancia_km,
                     null::float as custo_rs, 0 as dias_sem_preco
                 from public.telemetria t
@@ -272,8 +272,8 @@ class PostgresConsultasKpi:
         with self._db.transacao(org) as conn:
             linhas = conn.execute(
                 "select avg(t.lat) as lat, avg(t.lon) as lon,"
-                " sum(t.fuel_rate_lph) / 3600 as litros,"
-                " sum(t.speed_kmh / 3.6 * i.largura_m) / 10000 as area_ha"
+                " sum(t.fuel_rate_lph * t.peso_s) / 3600 as litros,"
+                " sum(t.speed_kmh / 3.6 * i.largura_m * t.peso_s) / 10000 as area_ha"
                 " from public.telemetria t"
                 " join public.sessoes_trabalho s on s.id = t.sessao_id"
                 " join public.organizacoes o on o.id = t.organizacao_id"
@@ -294,11 +294,13 @@ class PostgresConsultasKpi:
             if existe is None:
                 return None
             linhas = conn.execute(
-                "select ts, lat, lon, speed_kmh, engine_on from public.telemetria"
+                "select ts, lat, lon, speed_kmh, engine_on, peso_s from public.telemetria"
                 " where sessao_id = %s and geom is not null order by ts",
                 (sessao_id,),
             ).fetchall()
-        return pd.DataFrame(linhas, columns=["ts", "lat", "lon", "speed_kmh", "engine_on"])
+        return pd.DataFrame(
+            linhas, columns=["ts", "lat", "lon", "speed_kmh", "engine_on", "peso_s"]
+        )
 
     # ------------------------------------------------------------- legado
     def pontos_maquina(
@@ -323,9 +325,13 @@ class PostgresConsultasKpi:
             if valor is not None:
                 where.append(cond)
                 params.append(valor)
-        if passo_s > 1:
-            where.append("mod(extract(epoch from t.ts)::bigint, %s) = 0")
-            params.append(passo_s)
+        if passo_s > 1:  # a telemetria já vem em janelas: um ponto por janela de ``passo_s``
+            where.append(
+                "t.ts = (select min(t2.ts) from public.telemetria t2 where t2.maquina_id ="
+                " t.maquina_id and floor(extract(epoch from t2.ts) / %s)"
+                " = floor(extract(epoch from t.ts) / %s))"
+            )
+            params.extend([passo_s, passo_s])
         with self._db.transacao(org) as conn:
             if (
                 conn.execute(

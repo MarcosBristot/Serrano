@@ -43,6 +43,54 @@ COLUNAS_TELEMETRIA = (
     "engine_on",
 )
 
+JANELA_S = 10
+_MEDIAS = (
+    "speed_kmh",
+    "speed_alt_kmh",
+    "engine_rpm",
+    "engine_load_pct",
+    "fuel_rate_lph",
+    "fuel_level_l",
+)
+_ULTIMOS = ("fuel_total_l", "engine_hours")
+
+
+def compactar(limpo: pd.DataFrame, talhoes: list[Any], janela_s: int = JANELA_S) -> pd.DataFrame:
+    """1 Hz -> uma linha por janela de até ``janela_s`` com estado e talhão constantes.
+
+    O estado separa desligado / parado / trabalhando / sem velocidade, então os filtros das
+    consultas (``engine_on``, ``speed_kmh >= 1``) continuam valendo linha a linha. Médias são
+    soma / segundos (NaN conta como 0, como o ``sum`` do SQL); ``peso_s`` guarda os segundos.
+    """
+    df = limpo[list(COLUNAS_TELEMETRIA)].copy()
+    df["talhao_id"] = talhoes
+    ligado = df["engine_on"].fillna(False).astype(bool)
+    vel = df["speed_kmh"]
+    estado = np.select(
+        [~ligado, vel.isna(), vel >= 1], [0, 3, 2], default=1
+    )  # 0 desligado, 1 parado, 2 trabalhando, 3 sem velocidade
+    balde = df["ts"].dt.floor(f"{janela_s}s")  # não depende da unidade interna (ns ou us)
+    talhao = df["talhao_id"].fillna("-").astype(str)  # sem talhão é um valor, não "ausente"
+    gps = df["gps_valid"].fillna(False).astype(bool)
+    novo = (
+        (balde != balde.shift())
+        | (estado != np.roll(estado, 1))
+        | (talhao != talhao.shift())
+        | (gps != gps.shift())
+    )
+    novo.iloc[0] = True
+    grupo = novo.cumsum()
+    g = df.groupby(grupo, sort=False)
+    out = g[["ts", "lat", "lon", "gps_valid", "engine_on", "talhao_id"]].first()
+    peso = g.size()
+    for c in _MEDIAS:
+        out[c] = g[c].sum(min_count=1) / peso
+    for c in _ULTIMOS:
+        out[c] = g[c].last()
+    out["peso_s"] = peso
+    return out.reset_index(drop=True)
+
+
 PLANO_LIMITE = "PLANO_LIMITE_MAQUINAS"
 MAQUINA_INATIVA = "MAQUINA_INATIVA"
 ASSINATURA_INATIVA = "ASSINATURA_INATIVA"
@@ -338,22 +386,22 @@ class PostgresRepositorioResultados:
             " ts timestamptz, lat double precision, lon double precision, gps_valid boolean,"
             " speed_kmh real, speed_alt_kmh real, engine_rpm real, engine_load_pct real,"
             " fuel_rate_lph real, fuel_total_l double precision, fuel_level_l real,"
-            " engine_hours double precision, engine_on boolean, talhao_id uuid)"
+            " engine_hours double precision, engine_on boolean, talhao_id uuid, peso_s smallint)"
             " on commit drop"
         )
-        df = limpo[list(COLUNAS_TELEMETRIA)].astype(object)
-        por_ponto = r.localizacao.por_ponto if r.localizacao else [None] * len(df)
-        df["talhao_id"] = pd.Series(por_ponto, index=df.index, dtype=object)
-        df = df.where(pd.notna(df), None)
+        por_ponto = r.localizacao.por_ponto if r.localizacao else [None] * len(limpo)
+        df = compactar(limpo, list(por_ponto))[[*COLUNAS_TELEMETRIA, "talhao_id", "peso_s"]]
+        df = df.astype(object).where(pd.notna(df), None)
         with conn.cursor().copy(
-            f"copy _telemetria_carga ({', '.join(COLUNAS_TELEMETRIA)}, talhao_id) from stdin"
+            f"copy _telemetria_carga ({', '.join(COLUNAS_TELEMETRIA)}, talhao_id, peso_s)"
+            " from stdin"
         ) as copia:
             for linha in df.itertuples(index=False, name=None):
                 copia.write_row([_sem_nan(v) for v in linha])
         conn.execute(
             f"insert into public.telemetria (organizacao_id, maquina_id, sessao_id,"
-            f" {', '.join(COLUNAS_TELEMETRIA)}, talhao_id)"
-            f" select %s, %s, %s, {', '.join(COLUNAS_TELEMETRIA)}, talhao_id"
+            f" {', '.join(COLUNAS_TELEMETRIA)}, talhao_id, peso_s)"
+            f" select %s, %s, %s, {', '.join(COLUNAS_TELEMETRIA)}, talhao_id, peso_s"
             " from _telemetria_carga"
             " on conflict (maquina_id, ts) do nothing",  # sessões sobrepostas da mesma máquina
             (org, maquina_id, sessao_id),
