@@ -196,6 +196,7 @@ def test_zip_do_pendrive(
         "jdl": 4,
         "masterdata": 1,
         "gjson": 0,
+        "contorno": 0,
         "duplicados": 1,
     }
 

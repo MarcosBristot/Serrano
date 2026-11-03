@@ -235,3 +235,6 @@ data_storage/
 
 # SQL de configuração inicial (contém a senha do campero_backend)
 configurar_supabase.sql
+
+# token de desenvolvimento da pilha local (scripts/conta_local.py)
+.token_local

@@ -55,6 +55,22 @@ Variáveis (nos dois, exceto onde indicado):
 Escala: mais réplicas do `worker` processam em paralelo (`SKIP LOCKED`). A API tem limite de
 requisições **por instância** (memória); com mais de uma réplica, mover o limite para o proxy.
 
+**Conexões no plano gratuito do Supabase** (medido na carga do pendrive real, 1.586 arquivos):
+o pooler em **modo sessão** (porta 5432) aceita poucos clientes. Com a API e mais de um worker,
+cada processo com `DB_POOL_MAX=10`, ele recusa conexões (`EMAXCONNSESSION max clients reached`)
+e tudo para. Use o **modo transação** (porta 6543) com pools pequenos:
+
+| Processo | `DATABASE_URL` (porta) | `DB_MODO_POOLER` | `DB_POOL_MAX` |
+|---|---|---|---|
+| `api` | `...pooler.supabase.com:6543/postgres` | `transacao` | `3` |
+| `worker` (cada réplica) | `...pooler.supabase.com:6543/postgres` | `transacao` | `2` |
+
+A aplicação não usa recursos de sessão (advisory locks, `LISTEN`, `SET` fora de transação):
+a organização ativa vai em `set_config(..., true)`, local à transação. Com 6 a 8 workers, a
+carga processou de 15 a 28 arquivos por minuto (banco no Canadá; cada arquivo faz várias idas
+ao banco e ao Storage). O pool insiste na reconexão por até 24 h, então uma queda de rede longa
+não deixa o worker preso.
+
 **Latência**: o Railway pode não ter região na América do Sul. Com API nos EUA e banco em São Paulo,
 cada consulta custa ~120 ms; as rotas foram feitas com poucas consultas e agregados prontos
 (`metricas_diarias`). Medir no staging antes do piloto.
