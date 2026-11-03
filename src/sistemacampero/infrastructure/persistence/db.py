@@ -41,6 +41,10 @@ class Database:
             open=False,
             name="campero",
             check=ConnectionPool.check_connection,
+            # Padrão do psycopg_pool: desiste de reconectar após 5 min, e o processo fica
+            # sem conexões para sempre (PoolTimeout em loop). Queda de rede longa, hibernação
+            # ou manutenção do banco não pode matar o worker: continua tentando, com backoff.
+            reconnect_timeout=24 * 3600,
         )
         if abrir:
             self.pool.open(wait=False)
