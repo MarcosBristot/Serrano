@@ -34,6 +34,17 @@ class ConsultasKpi(Protocol):
     def por_safra(self, org: UUID, f: dict[str, Any], inicio_mes: int) -> list[dict[str, Any]]: ...
     def pontos_mapa(self, org: UUID, f: dict[str, Any], celula_m: float) -> pd.DataFrame: ...
     def pontos_sessao(self, org: UUID, sessao_id: UUID) -> pd.DataFrame | None: ...
+    def jornadas(
+        self,
+        org: UUID,
+        f: dict[str, Any],
+        versao: str,
+        limite: int,
+        cursor: tuple[str, UUID] | None,
+        curtas: bool,
+    ) -> list[dict[str, Any]]: ...
+    def arquivos_da_jornada(self, org: UUID, jornada_id: UUID) -> list[dict[str, Any]]: ...
+    def pontos_jornada(self, org: UUID, jornada_id: UUID) -> pd.DataFrame | None: ...
 
 
 SomasDe = Any  # callable linha -> Somas (infraestrutura)
@@ -135,8 +146,50 @@ class ServicoKpis:
             raise Invalido("tamanho_m entre 10 e 2000.", codigo="TAMANHO_INVALIDO")
         return mapa_de_calor(self._q.pontos_mapa(org, self._f(f), tamanho_m / 5), tamanho_m)
 
+    # ------------------------------------------------------------- jornadas
+    def jornadas(
+        self,
+        org: UUID,
+        filtros: dict[str, Any],
+        limite: int,
+        cursor: tuple[str, UUID] | None,
+        curtas: bool = False,
+    ) -> list[dict[str, Any]]:
+        return [
+            _com_indicadores(j)
+            for j in self._q.jornadas(org, filtros, self._versao, limite, cursor, curtas)
+        ]
+
+    def jornada(self, org: UUID, jornada_id: UUID) -> dict[str, Any]:
+        linhas = self._q.jornadas(org, {"id": jornada_id}, self._versao, 1, None, True)
+        if not linhas:
+            raise NaoEncontrado("Jornada não encontrada.", codigo="JORNADA_NAO_ENCONTRADA")
+        return {
+            **_com_indicadores(linhas[0]),
+            "arquivos_detalhe": self._q.arquivos_da_jornada(org, jornada_id),
+        }
+
+    def trajeto_jornada(self, org: UUID, jornada_id: UUID, max_pontos: int) -> dict[str, Any]:
+        pontos = self._q.pontos_jornada(org, jornada_id)
+        if pontos is None:
+            raise NaoEncontrado("Jornada não encontrada.", codigo="JORNADA_NAO_ENCONTRADA")
+        return trajeto(pontos, max_pontos)
+
     def trajeto(self, org: UUID, sessao_id: UUID, max_pontos: int) -> dict[str, Any]:
         pontos = self._q.pontos_sessao(org, sessao_id)
         if pontos is None:
             raise NaoEncontrado("Sessão não encontrada.", codigo="SESSAO_NAO_ENCONTRADA")
         return trajeto(pontos, max_pontos)
+
+
+def _com_indicadores(j: dict[str, Any]) -> dict[str, Any]:
+    """L/ha, ha/h, ociosidade e custo da jornada (o preço vigente no dia dela)."""
+    motor, area, litros = j["motor_h"] or 0, j["area_ha"] or 0, j["litros"] or 0
+    preco = j.get("preco_rs_l")
+    return {
+        **j,
+        "l_ha": litros / area if area > 0.05 else None,
+        "ha_h": area / j["trabalho_h"] if j["trabalho_h"] and area > 0.05 else None,
+        "ociosidade_pct": 100 * j["ocioso_h"] / motor if motor > 0 else None,
+        "custo_rs": litros * preco if preco is not None else None,
+    }

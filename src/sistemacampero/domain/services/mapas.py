@@ -35,7 +35,8 @@ def trajeto(df: pd.DataFrame, max_pontos: int = 2000) -> dict[str, Any]:
     """FeatureCollection: linhas por estado (trabalho/parado) e paradas longas como pontos.
 
     ``df``: ts, lat, lon, speed_kmh, engine_on e, opcional, peso_s (segundos que cada ponto
-    representa; telemetria em janelas). Só pontos com posição. A linha é simplificada (Douglas-Peucker em UTM) até caber em ``max_pontos`` vértices.
+    representa; telemetria em janelas). Só pontos com posição. A linha é simplificada
+    (Douglas-Peucker em UTM) até caber em ``max_pontos`` vértices.
     """
     vazio: dict[str, Any] = {"type": "FeatureCollection", "features": []}
     df = df.dropna(subset=["lat", "lon"]).reset_index(drop=True)

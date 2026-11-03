@@ -134,6 +134,119 @@ def recalcular_diarias(
     ).rowcount
 
 
+# Jornada "curta": menos de 3 min de motor e nenhuma área (liga/desliga, teste do monitor).
+_CURTA = "j.motor_h < 0.05 and j.area_ha < 0.01"
+
+# Arquivos da mesma máquina separados por menos que isto formam uma jornada.
+INTERVALO_JORNADA = "15 minutes"
+
+
+def recalcular_jornadas(
+    conn: Conexao, org: UUID, maquina_id: UUID, inicio: datetime, fim: datetime, versao: str
+) -> int:
+    """Refaz as jornadas da máquina em volta de [inicio, fim].
+
+    Apaga as jornadas que encostam na janela (com folga do intervalo), alarga a janela até as
+    bordas delas e reagrupa os arquivos ali dentro ("ilhas" de sessões com folga menor que
+    ``INTERVALO_JORNADA``, considerando arquivos sobrepostos). As somas vêm da telemetria,
+    como as diárias, para não contar duas vezes arquivos gravados em paralelo.
+    """
+    borda = conn.execute(
+        "with apagadas as (delete from public.jornadas where maquina_id = %(maq)s"
+        "   and versao_regras = %(versao)s"
+        "   and fim >= %(a)s::timestamptz - %(gap)s::interval"
+        "   and inicio <= %(b)s::timestamptz + %(gap)s::interval returning inicio, fim)"
+        " select least(min(inicio), %(a)s::timestamptz) as a,"
+        "        greatest(max(fim), %(b)s::timestamptz) as b from apagadas",
+        {"maq": maquina_id, "versao": versao, "a": inicio, "b": fim, "gap": INTERVALO_JORNADA},
+    ).fetchone()
+    assert borda is not None
+    return conn.execute(
+        """
+        with s as (
+            select s.id, s.inicio, s.fim, s.operacao from public.sessoes_trabalho s
+            where s.maquina_id = %(maq)s
+              and s.fim >= %(a)s::timestamptz - %(gap)s::interval
+              and s.inicio <= %(b)s::timestamptz + %(gap)s::interval
+        ), o as (
+            select *, max(fim) over (order by inicio, id
+                rows between unbounded preceding and 1 preceding) as fim_ant
+            from s
+        ), g as (
+            select *, sum(case when fim_ant is null or inicio > fim_ant + %(gap)s::interval
+                then 1 else 0 end) over (order by inicio, id) as grupo
+            from o
+        ), j as (
+            select grupo, min(inicio) as inicio, max(fim) as fim, count(*) as arquivos,
+                mode() within group (order by operacao) as operacao
+            from g group by grupo
+        ), pts as (
+            select j.grupo, t.sessao_id,
+                case ss.talhao_origem
+                    when 'manual' then ss.talhao_id
+                    when 'monitor' then coalesce(t.talhao_id, ss.talhao_id)
+                    else t.talhao_id
+                end as talhao_id,
+                coalesce(sum(t.peso_s) filter (where t.engine_on), 0) as motor_s,
+                coalesce(sum(t.peso_s) filter (where t.engine_on and t.speed_kmh >= 1), 0)
+                    as trabalho_s,
+                coalesce(sum(t.peso_s) filter (where t.engine_on and t.speed_kmh < 1), 0)
+                    as ocioso_s,
+                coalesce(sum(t.fuel_rate_lph * t.peso_s) filter (where t.engine_on), 0) / 3600
+                    as litros,
+                coalesce(sum(t.fuel_rate_lph * t.peso_s)
+                    filter (where t.engine_on and t.speed_kmh >= 1), 0) / 3600 as litros_trabalho,
+                coalesce(sum(t.fuel_rate_lph * t.peso_s)
+                    filter (where t.engine_on and t.speed_kmh < 1), 0) / 3600 as litros_ocioso,
+                coalesce(sum(t.speed_kmh * t.peso_s)
+                    filter (where t.engine_on and t.speed_kmh >= 1), 0) / 3600 as distancia_km
+            from j
+            join public.telemetria t on t.maquina_id = %(maq)s
+                and t.ts >= j.inicio and t.ts <= j.fim
+            join public.sessoes_trabalho ss on ss.id = t.sessao_id
+            group by 1, 2, 3
+        ), partes as (
+            select p.*,
+                coalesce(ms.area_cobertura_ha, ms.area_estimada_ha, 0)
+                  * case when ms.distancia_trabalho_km > 0
+                         then least(p.distancia_km / ms.distancia_trabalho_km, 1) else 0 end
+                  as area_ha
+            from pts p
+            left join public.metricas_sessao ms on ms.sessao_id = p.sessao_id and ms.vigente
+        ), somas as (
+            select grupo, sum(motor_s) / 3600.0 as motor_h, sum(trabalho_s) / 3600.0 as trabalho_h,
+                sum(ocioso_s) / 3600.0 as ocioso_h, sum(litros) as litros,
+                sum(litros_trabalho) as litros_trabalho, sum(litros_ocioso) as litros_ocioso,
+                sum(area_ha) as area_ha, sum(distancia_km) as distancia_km,
+                count(distinct talhao_id) as talhoes
+            from partes group by grupo
+        ), principal as (
+            select distinct on (grupo) grupo, talhao_id from (
+                select grupo, talhao_id, sum(trabalho_s) as trab, sum(motor_s) as mot
+                from partes where talhao_id is not null group by 1, 2
+            ) x order by grupo, trab desc, mot desc
+        )
+        insert into public.jornadas (organizacao_id, maquina_id, versao_regras, inicio, fim,
+            talhao_id, talhoes, operacao, arquivos, motor_h, trabalho_h, ocioso_h, litros,
+            litros_trabalho, litros_ocioso, area_ha, distancia_km)
+        select %(org)s, %(maq)s, %(versao)s, j.inicio, j.fim, p.talhao_id,
+            coalesce(x.talhoes, 0), j.operacao, j.arquivos,
+            coalesce(x.motor_h, 0), coalesce(x.trabalho_h, 0), coalesce(x.ocioso_h, 0),
+            coalesce(x.litros, 0), coalesce(x.litros_trabalho, 0), coalesce(x.litros_ocioso, 0),
+            coalesce(x.area_ha, 0), coalesce(x.distancia_km, 0)
+        from j left join somas x using (grupo) left join principal p using (grupo)
+        """,
+        {
+            "maq": maquina_id,
+            "versao": versao,
+            "org": org,
+            "a": borda["a"],
+            "b": borda["b"],
+            "gap": INTERVALO_JORNADA,
+        },
+    ).rowcount
+
+
 class PostgresConsultasKpi:
     def __init__(self, db: Database) -> None:
         self._db = db
@@ -285,6 +398,87 @@ class PostgresConsultasKpi:
                 [f["inicio"], f["fim"], *params, grau, grau],
             ).fetchall()
         return pd.DataFrame(linhas, columns=["lat", "lon", "litros", "area_ha"], dtype=float)
+
+    # ------------------------------------------------------------- jornadas
+    def jornadas(
+        self,
+        org: UUID,
+        f: dict[str, Any],
+        versao: str,
+        limite: int,
+        cursor: tuple[str, UUID] | None,
+        curtas: bool,
+    ) -> list[dict[str, Any]]:
+        where: list[str] = ["j.versao_regras = %s"]
+        params: list[Any] = [versao]
+        if f.get("id"):
+            where.append("j.id = %s")
+            params.append(f["id"])
+        if f.get("maquina_id"):
+            where.append("j.maquina_id = %s")
+            params.append(f["maquina_id"])
+        if f.get("talhao_id"):
+            where.append("j.talhao_id = %s")
+            params.append(f["talhao_id"])
+        if f.get("inicio"):
+            where.append("(j.inicio at time zone o.fuso)::date >= %s")
+            params.append(f["inicio"])
+        if f.get("fim"):
+            where.append("(j.inicio at time zone o.fuso)::date <= %s")
+            params.append(f["fim"])
+        if not curtas:
+            where.append(f"not ({_CURTA})")
+        if cursor:
+            where.append("(j.inicio, j.id) < (%s::timestamptz, %s)")
+            params.extend(cursor)
+        with self._db.transacao(org) as conn:
+            return conn.execute(
+                "select j.id, j.maquina_id, m.serial, m.apelido, j.inicio, j.fim, j.talhao_id,"
+                " t.nome as talhao_nome, j.talhoes, j.operacao, j.arquivos, j.motor_h,"
+                " j.trabalho_h, j.ocioso_h, j.litros, j.litros_trabalho, j.litros_ocioso,"
+                " j.area_ha, j.distancia_km, p.preco_rs_l::float as preco_rs_l,"
+                f" ({_CURTA}) as curta"
+                " from public.jornadas j"
+                " join public.organizacoes o on o.id = j.organizacao_id"
+                " join public.maquinas m on m.id = j.maquina_id"
+                " left join public.talhoes t on t.id = j.talhao_id"
+                " left join lateral (select pc.preco_rs_l from public.preco_combustivel pc"
+                "   where pc.tipo = 'S10' and pc.valido_de <= (j.inicio at time zone o.fuso)::date"
+                "     and (pc.valido_ate is null"
+                "          or pc.valido_ate > (j.inicio at time zone o.fuso)::date)"
+                "   order by pc.valido_de desc limit 1) p on true"
+                f" where {' and '.join(where)} order by j.inicio desc, j.id desc limit %s",
+                (*params, limite),
+            ).fetchall()
+
+    def arquivos_da_jornada(self, org: UUID, jornada_id: UUID) -> list[dict[str, Any]]:
+        with self._db.transacao(org) as conn:
+            return conn.execute(
+                "select s.id, s.inicio, s.fim, s.n_amostras, s.qualidade_score, ms.motor_h,"
+                " ms.litros_integral from public.jornadas j"
+                " join public.sessoes_trabalho s on s.maquina_id = j.maquina_id"
+                "  and s.inicio >= j.inicio and s.fim <= j.fim"
+                " left join public.metricas_sessao ms on ms.sessao_id = s.id and ms.vigente"
+                " where j.id = %s order by s.inicio",
+                (jornada_id,),
+            ).fetchall()
+
+    def pontos_jornada(self, org: UUID, jornada_id: UUID) -> pd.DataFrame | None:
+        with self._db.transacao(org) as conn:
+            j = conn.execute(
+                "select maquina_id, inicio, fim from public.jornadas where id = %s", (jornada_id,)
+            ).fetchone()
+            if j is None:
+                return None
+            linhas = conn.execute(
+                "select ts, lat, lon, speed_kmh, engine_on, peso_s from public.telemetria"
+                " where maquina_id = %s and ts >= %s and ts <= %s and geom is not null"
+                " order by ts",
+                (j["maquina_id"], j["inicio"], j["fim"]),
+            ).fetchall()
+        return pd.DataFrame(
+            linhas, columns=["ts", "lat", "lon", "speed_kmh", "engine_on", "peso_s"]
+        )
 
     def pontos_sessao(self, org: UUID, sessao_id: UUID) -> pd.DataFrame | None:
         with self._db.transacao(org) as conn:
