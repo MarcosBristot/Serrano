@@ -17,6 +17,7 @@ from shapely.geometry import MultiPolygon
 from sistemacampero.domain.cadastro import ImportacaoCadastro, OrigemContorno, ResumoImportacao
 from sistemacampero.domain.errors import Conflito, NaoEncontrado
 from sistemacampero.domain.services.geo import Contorno
+from sistemacampero.infrastructure.parsers.shapefile import nome_normalizado
 from sistemacampero.infrastructure.persistence.db import Conexao, Database
 
 _GEOM = "extensions.st_multi(extensions.st_geomfromwkb(%s, 4326))"
@@ -206,6 +207,51 @@ class PostgresRepositorioCadastro:
             implementos=len(imp.implementos),
             operadores=len(imp.operadores),
         )
+
+    def importar_contornos(
+        self, org: UUID, itens: list[tuple[str, MultiPolygon]]
+    ) -> dict[str, int]:
+        """Contornos de outro equipamento (ex.: OMNI), casados pelo nome do talhão.
+
+        Talhão sem contorno ganha o do arquivo; o que já tem (monitor, upload ou desenho)
+        fica como está; talhão que não existe é criado. Reimportar não duplica nada.
+        """
+        novos = criados = preservados = 0
+        with self._db.transacao(org) as conn:
+            existentes = {
+                nome_normalizado(str(t["nome"])): t
+                for t in conn.execute(
+                    "select id, nome, geometria is not null as tem_contorno"
+                    " from public.talhoes where organizacao_id = %s order by criado_em",
+                    (org,),
+                ).fetchall()
+            }
+            for nome, geom in itens:
+                chave = nome_normalizado(nome)
+                t = existentes.get(chave)
+                if t is None:
+                    conn.execute(
+                        "insert into public.talhoes"
+                        " (organizacao_id, external_guid, nome, geometria, origem_contorno)"
+                        f" values (%s, %s, %s, {_GEOM}, 'upload')"
+                        " on conflict (organizacao_id, external_guid) do nothing",
+                        (org, f"contorno:{chave}", nome, _wkb(geom)),
+                    )
+                    criados += 1
+                elif t["tem_contorno"]:
+                    preservados += 1
+                else:
+                    conn.execute(
+                        f"update public.talhoes set geometria = {_GEOM}, origem_contorno = 'upload'"
+                        " where id = %s and geometria is null",
+                        (_wkb(geom), t["id"]),
+                    )
+                    novos += 1
+        return {
+            "contornos_novos": novos,
+            "talhoes_criados": criados,
+            "preservados": preservados,
+        }
 
     @staticmethod
     def _upsert(conn: Conexao, tabela: str, org: UUID, guid: str, campos: dict[str, Any]) -> UUID:

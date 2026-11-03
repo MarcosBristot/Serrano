@@ -163,6 +163,10 @@ class RepositorioCadastro(Protocol):
 
     def importar(self, org: UUID, imp: ImportacaoCadastro) -> ResumoImportacao: ...
 
+    def importar_contornos(
+        self, org: UUID, itens: list[tuple[str, MultiPolygon]]
+    ) -> dict[str, int]: ...
+
     def arquivos_para_relocalizar(
         self, org: UUID, contorno: MultiPolygon | None = None, talhao_id: UUID | None = None
     ) -> list[UUID]: ...

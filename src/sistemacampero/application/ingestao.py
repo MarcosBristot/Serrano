@@ -10,11 +10,14 @@ from __future__ import annotations
 import hashlib
 import io
 import logging
+import posixpath
 import tempfile
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from typing import Any, BinaryIO, Protocol, cast
 from uuid import UUID
+
+from shapely.geometry import MultiPolygon
 
 from sistemacampero.application.alertas import ServicoAlertas
 from sistemacampero.application.cadastro import ServicoCadastro
@@ -47,6 +50,7 @@ _CONTENT_TYPE = {
     TipoArquivo.ZIP: "application/zip",
     TipoArquivo.MASTERDATA: "application/xml",
     TipoArquivo.GJSON: "application/geo+json",
+    TipoArquivo.CONTORNO: "application/octet-stream",
 }
 _ASSINATURA = {TipoArquivo.JDL: b"\x0d", TipoArquivo.ZIP: b"PK\x03\x04"}
 
@@ -149,6 +153,7 @@ class ServicoIngestao:
 
 
 LeitorCadastro = Callable[[bytes, dict[str, bytes]], ImportacaoCadastro]
+LeitorContorno = Callable[[bytes, bytes | None], MultiPolygon]
 
 
 class ExecutorDeJobs:
@@ -166,7 +171,9 @@ class ExecutorDeJobs:
         leitor_cadastro: LeitorCadastro,
         alertas: ServicoAlertas | None = None,
         limites_zip: zip_seguro.LimitesZip | None = None,
+        leitor_contorno: LeitorContorno | None = None,
     ) -> None:
+        self._leitor_contorno = leitor_contorno
         self._alertas = alertas
         self._repo = repo
         self._cadastro = cadastro
@@ -182,6 +189,7 @@ class ExecutorDeJobs:
             TipoJob.PROCESSAR_ARQUIVO: self._processar_arquivo,
             TipoJob.EXPANDIR_ZIP: self._expandir_zip,
             TipoJob.IMPORTAR_GEN4: self._importar_gen4,
+            TipoJob.IMPORTAR_CONTORNOS: self._importar_contornos,
         }
 
     def registrar(
@@ -272,11 +280,13 @@ class ExecutorDeJobs:
             return {"status": "arquivo_inexistente"}
         self._repo.marcar_arquivo(org, zip_id, StatusArquivo.PROCESSANDO, None)
         lote_id = arquivo.get("lote_id") or job.lote_id
-        contagem = {"jdl": 0, "masterdata": 0, "gjson": 0, "duplicados": 0}
+        contagem = {"jdl": 0, "masterdata": 0, "gjson": 0, "contorno": 0, "duplicados": 0}
         masterdata: list[UUID] = []
         # nome no zip -> arquivo (novo ou já existente): o .gjson repetido de outro pendrive
         # tem como "pai" o primeiro zip, então a relação vai explícita no payload.
         gjson: dict[str, str] = {}
+        perimetros: dict[str, str] = {}  # pasta do talhão no zip -> arquivo do .shp
+        projecoes: dict[str, str] = {}  # pasta do talhão no zip -> texto do .prj
         with tempfile.TemporaryFile() as arquivo_tmp:
             tmp = cast(BinaryIO, arquivo_tmp)
             self._storage.copiar_para(BUCKET_BRUTOS, str(arquivo["caminho_storage"]), tmp)
@@ -286,7 +296,16 @@ class ExecutorDeJobs:
                     if i % 50 == 0:
                         controle.verificar()
                         controle.progresso({"entradas_lidas": i, **contagem})
+                    pasta = posixpath.dirname(entrada.caminho_no_zip.replace("\\", "/"))
+                    if (
+                        entrada.tipo is TipoArquivo.CONTORNO
+                        and entrada.caminho_no_zip.lower().endswith(".prj")
+                    ):
+                        projecoes[pasta] = entrada.conteudo.decode("latin-1")[:2000]
+                        continue
                     reg = self._registrar_entrada(org, zip_id, lote_id, arquivo, entrada)
+                    if entrada.tipo is TipoArquivo.CONTORNO:
+                        perimetros[pasta] = str(reg.arquivo_id)
                     if entrada.tipo is TipoArquivo.MASTERDATA:
                         masterdata.append(reg.arquivo_id)
                     elif entrada.tipo is TipoArquivo.GJSON:
@@ -307,8 +326,67 @@ class ExecutorDeJobs:
                 lote_id,
                 f"importar_gen4:{zip_id}:{md_id}",
             )
+        if perimetros:
+            self._repo.enfileirar(
+                org,
+                TipoJob.IMPORTAR_CONTORNOS,
+                {
+                    "contornos": [
+                        {
+                            "talhao": posixpath.basename(pasta).replace("_", " ").strip(),
+                            "arquivo_id": ident,
+                            "prj": projecoes.get(pasta, ""),
+                        }
+                        for pasta, ident in sorted(perimetros.items())
+                    ]
+                },
+                lote_id,
+                f"importar_contornos:{zip_id}",
+            )
         self._repo.marcar_arquivo(org, zip_id, StatusArquivo.PROCESSADO, None)
         return {"status": StatusArquivo.PROCESSADO.value, **contagem}
+
+    # ------------------------------------------------------------ contornos em shapefile
+    def _importar_contornos(self, job: Job, controle: ControleJob) -> dict[str, Any]:
+        """Perímetros (ex.: OMNI) casados com os talhões pelo nome; contorno existente fica."""
+        if self._leitor_contorno is None:
+            return {"status": "sem_leitor_de_contorno"}
+        org = job.organizacao_id
+        itens: list[tuple[str, MultiPolygon]] = []
+        lidos: list[UUID] = []
+        rejeitados = 0
+        for c in job.payload.get("contornos", []):
+            arquivo = self._repo.obter_arquivo(org, UUID(c["arquivo_id"]))
+            if arquivo is None:
+                continue
+            shp = self._storage.ler(BUCKET_BRUTOS, str(arquivo["caminho_storage"]))
+            try:
+                geom = self._leitor_contorno(
+                    shp, c["prj"].encode("latin-1") if c.get("prj") else None
+                )
+            except Invalido as exc:
+                rejeitados += 1
+                self._repo.marcar_arquivo(
+                    org, arquivo["id"], StatusArquivo.REJEITADO, f"{exc.codigo}: {exc.mensagem}"
+                )
+                continue
+            itens.append((str(c["talhao"]), geom))
+            lidos.append(arquivo["id"])
+        controle.verificar()
+        resumo = self._cadastro.importar_contornos(org, itens)
+        relocalizadas = 0
+        if resumo["contornos_novos"] or resumo["talhoes_criados"]:
+            relocalizadas = self._servico_cadastro.relocalizar(
+                org, self._cadastro.arquivos_para_relocalizar(org)
+            )
+        for ident in lidos:
+            self._repo.marcar_arquivo(org, ident, StatusArquivo.PROCESSADO, None)
+        return {
+            "status": StatusArquivo.PROCESSADO.value,
+            **resumo,
+            "rejeitados": rejeitados,
+            "sessoes_relocalizadas": relocalizadas,
+        }
 
     # ------------------------------------------------------------ cadastro Gen4
     def _importar_gen4(self, job: Job, controle: ControleJob) -> dict[str, Any]:

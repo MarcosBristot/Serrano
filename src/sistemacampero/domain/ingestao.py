@@ -20,12 +20,14 @@ class TipoJob(StrEnum):
     IMPORTAR_GEN4 = "importar_gen4"
     PROCESSAR_ARQUIVO = "processar_arquivo"
     EXPORTAR = "exportar"
+    IMPORTAR_CONTORNOS = "importar_contornos"
 
 
 # Menor = antes: zip -> cadastro do monitor (talhões) -> .jdl (já localiza por GPS).
 PRIORIDADE: dict[TipoJob, int] = {
     TipoJob.EXPANDIR_ZIP: 50,
     TipoJob.IMPORTAR_GEN4: 60,
+    TipoJob.IMPORTAR_CONTORNOS: 60,
     TipoJob.PROCESSAR_ARQUIVO: 100,
     TipoJob.EXPORTAR: 120,
 }
@@ -55,6 +57,7 @@ class TipoArquivo(StrEnum):
     ZIP = "zip"
     MASTERDATA = "masterdata"
     GJSON = "gjson"
+    CONTORNO = "contorno"  # perímetro de talhão em shapefile (ex.: OMNI do pulverizador)
 
 
 _EXTENSOES = {".jdl": TipoArquivo.JDL, ".zip": TipoArquivo.ZIP, ".gjson": TipoArquivo.GJSON}
@@ -65,6 +68,8 @@ def tipo_do_arquivo(nome: str) -> TipoArquivo | None:
     base = posixpath.basename(nome.replace("\\", "/"))
     if base.lower() == "masterdata.xml":
         return TipoArquivo.MASTERDATA
+    if base.lower() in ("_perimeter.shp", "_perimeter.prj"):  # OMNI: Data/<cliente>/<talhão>/
+        return TipoArquivo.CONTORNO
     _, ext = posixpath.splitext(base.lower())
     return _EXTENSOES.get(ext)
 
@@ -80,7 +85,7 @@ def nome_para_exibicao(nome: str) -> str:
 
 def caminho_bruto(organizacao_id: UUID, sha256: str, tipo: TipoArquivo) -> str:
     """O nome do cliente nunca vira caminho: brutos/<org>/<sha256>.<ext>."""
-    ext = "xml" if tipo is TipoArquivo.MASTERDATA else tipo.value
+    ext = {TipoArquivo.MASTERDATA: "xml", TipoArquivo.CONTORNO: "shp"}.get(tipo, tipo.value)
     return f"{organizacao_id}/{sha256}.{ext}"
 
 
