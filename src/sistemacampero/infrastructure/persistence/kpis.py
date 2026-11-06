@@ -203,6 +203,9 @@ def recalcular_jornadas(
             from j
             join public.telemetria t on t.maquina_id = %(maq)s
                 and t.ts >= j.inicio and t.ts <= j.fim
+                -- limites constantes: o planejador só poda as partições mensais com eles
+                and t.ts >= %(a)s::timestamptz - %(gap)s::interval
+                and t.ts <= %(b)s::timestamptz + %(gap)s::interval
             join public.sessoes_trabalho ss on ss.id = t.sessao_id
             group by 1, 2, 3
         ), partes as (
