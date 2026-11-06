@@ -8,6 +8,9 @@ import BoasVindas from "./paginas/BoasVindas";
 import Configuracoes from "./paginas/Configuracoes";
 import Convite from "./paginas/Convite";
 import Enviar from "./paginas/Enviar";
+import Inicio from "./paginas/Inicio";
+import JornadaDetalhe from "./paginas/JornadaDetalhe";
+import Jornadas from "./paginas/Jornadas";
 import Login from "./paginas/Login";
 import MapaPagina from "./paginas/MapaPagina";
 import Painel from "./paginas/Painel";
@@ -27,7 +30,10 @@ export default function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route index element={<Painel />} />
+        <Route index element={<Inicio />} />
+        <Route path="analise" element={<Painel />} />
+        <Route path="jornadas" element={<Jornadas />} />
+        <Route path="jornadas/:id" element={<JornadaDetalhe />} />
         <Route path="mapa" element={<MapaPagina />} />
         <Route path="sessoes" element={<Sessoes />} />
         <Route path="sessoes/:id" element={<SessaoDetalhe />} />

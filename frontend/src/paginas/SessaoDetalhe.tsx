@@ -28,7 +28,7 @@ export default function SessaoDetalhe() {
 
   return (
     <>
-      <Link to="/sessoes" className="mb-4 inline-flex items-center gap-1 text-sm font-semibold text-folha-700"><ArrowLeft size={16} /> Operações</Link>
+      <Link to="/sessoes" className="mb-4 inline-flex items-center gap-1 text-sm font-semibold text-folha-700"><ArrowLeft size={16} /> Arquivos do monitor</Link>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold sm:text-3xl">{d.apelido ?? d.serial}</h1>

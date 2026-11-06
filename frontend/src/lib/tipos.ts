@@ -151,3 +151,43 @@ export interface Membro {
   email: string | null;
   papel: Papel;
 }
+
+/** Jornada: os arquivos do monitor da mesma máquina agrupados (o que o produtor chama de operação). */
+export interface Jornada {
+  id: string;
+  maquina_id: string;
+  serial: string;
+  apelido: string | null;
+  inicio: string;
+  fim: string;
+  talhao_id: string | null;
+  talhao_nome: string | null;
+  talhoes: number;
+  operacao: string | null;
+  arquivos: number;
+  motor_h: number;
+  trabalho_h: number;
+  ocioso_h: number;
+  litros: number;
+  litros_trabalho: number;
+  litros_ocioso: number;
+  area_ha: number;
+  distancia_km: number;
+  l_ha: number | null;
+  ha_h: number | null;
+  ociosidade_pct: number | null;
+  custo_rs: number | null;
+  curta: boolean;
+}
+
+export interface JornadaDetalhe extends Jornada {
+  arquivos_detalhe: {
+    id: string;
+    inicio: string;
+    fim: string;
+    n_amostras: number;
+    qualidade_score: number | null;
+    motor_h: number | null;
+    litros_integral: number | null;
+  }[];
+}

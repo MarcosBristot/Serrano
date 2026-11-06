@@ -1,5 +1,5 @@
 import {
-  Bell, ChevronDown, LayoutDashboard, LogOut, Map, Menu, Settings, Sprout, Tractor, Upload, X,
+  Bell, ChevronDown, FileText, Home, LayoutDashboard, LogOut, Map, Menu, Settings, Sprout, Tractor, Upload, X,
 } from "lucide-react";
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
@@ -8,14 +8,26 @@ import { Marca } from "./Marca";
 
 import { type Preset, usePeriodo, useSessao } from "../contextos/Sessao";
 
-const MENU = [
-  { para: "/", rotulo: "Painel", icone: LayoutDashboard },
-  { para: "/mapa", rotulo: "Mapa", icone: Map },
-  { para: "/sessoes", rotulo: "Operações", icone: Tractor },
-  { para: "/alertas", rotulo: "Alertas", icone: Bell },
-  { para: "/talhoes", rotulo: "Talhões", icone: Sprout },
-  { para: "/enviar", rotulo: "Enviar pendrive", icone: Upload },
-  { para: "/configuracoes", rotulo: "Configurações", icone: Settings },
+// Primeiro o essencial para o produtor; o detalhe fica agrupado à parte.
+const MENU: { grupo?: string; itens: { para: string; rotulo: string; icone: typeof Home }[] }[] = [
+  {
+    itens: [
+      { para: "/", rotulo: "Início", icone: Home },
+      { para: "/enviar", rotulo: "Enviar pendrive", icone: Upload },
+    ],
+  },
+  {
+    grupo: "Análise detalhada",
+    itens: [
+      { para: "/analise", rotulo: "Painel completo", icone: LayoutDashboard },
+      { para: "/jornadas", rotulo: "Operações", icone: Tractor },
+      { para: "/mapa", rotulo: "Mapa", icone: Map },
+      { para: "/alertas", rotulo: "Alertas", icone: Bell },
+      { para: "/talhoes", rotulo: "Talhões", icone: Sprout },
+      { para: "/sessoes", rotulo: "Arquivos do monitor", icone: FileText },
+    ],
+  },
+  { itens: [{ para: "/configuracoes", rotulo: "Configurações", icone: Settings }] },
 ];
 
 const PRESETS: { valor: Preset; rotulo: string }[] = [
@@ -77,21 +89,28 @@ function Navegacao({ aoNavegar }: { aoNavegar?: () => void }) {
         </div>
       )}
 
-      <nav className="flex-1 space-y-1 px-3">
-        {MENU.map(({ para, rotulo, icone: Icone }) => (
-          <NavLink
-            key={para}
-            to={para}
-            end={para === "/"}
-            onClick={aoNavegar}
-            className={({ isActive }) =>
-              `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
-                isActive ? "bg-white text-folha-900 shadow" : "text-folha-100/80 hover:bg-white/10 hover:text-white"
-              }`
-            }
-          >
-            <Icone size={18} /> {rotulo}
-          </NavLink>
+      <nav className="flex-1 space-y-4 overflow-y-auto px-3" aria-label="Menu principal">
+        {MENU.map((secao, i) => (
+          <div key={i} className="space-y-1">
+            {secao.grupo && (
+              <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-folha-200/70">{secao.grupo}</div>
+            )}
+            {secao.itens.map(({ para, rotulo, icone: Icone }) => (
+              <NavLink
+                key={para}
+                to={para}
+                end={para === "/"}
+                onClick={aoNavegar}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
+                    isActive ? "bg-white text-folha-900 shadow" : "text-folha-100/80 hover:bg-white/10 hover:text-white"
+                  }`
+                }
+              >
+                <Icone size={18} aria-hidden="true" /> {rotulo}
+              </NavLink>
+            ))}
+          </div>
         ))}
       </nav>
 
