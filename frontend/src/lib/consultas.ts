@@ -37,3 +37,13 @@ export function useContornos(): { dados: FC | undefined; carregando: boolean } {
       : undefined;
   return { dados, carregando: lista.isLoading || !prontos };
 }
+
+/** Cabeceiras e linhas-guia (ex.: do OMNI do pulverizador) para o mapa. */
+export function useLinhasTalhao(ativo = true) {
+  return useQuery({
+    queryKey: ["talhoes-linhas"],
+    queryFn: () => api<FC>("/talhoes/linhas"),
+    staleTime: 5 * 60_000,
+    enabled: ativo,
+  });
+}

@@ -6,6 +6,7 @@ from sistemacampero.domain.errors import Invalido
 from sistemacampero.domain.ports import TelemetryAdapter
 from sistemacampero.domain.telemetry import ParseContext
 from sistemacampero.infrastructure.parsers.john_deere_gen4 import JohnDeereGen4Adapter
+from sistemacampero.infrastructure.parsers.john_deere_gs3 import JohnDeereGs3Adapter
 
 
 def _chave(valor: str) -> str:
@@ -54,4 +55,4 @@ class RegistroAdapters:
 
 def registro_padrao() -> RegistroAdapters:
     """Adapters disponíveis em produção. Nova marca: ver docs/como-adicionar-marca.md."""
-    return RegistroAdapters([JohnDeereGen4Adapter()])
+    return RegistroAdapters([JohnDeereGen4Adapter(), JohnDeereGs3Adapter()])

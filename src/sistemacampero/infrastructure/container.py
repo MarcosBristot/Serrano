@@ -20,7 +20,7 @@ from sistemacampero.infrastructure.config import Settings
 from sistemacampero.infrastructure.notificacoes import Cifra, Notificador
 from sistemacampero.infrastructure.parsers.john_deere_gen4.masterdata import ler_cadastro_gen4
 from sistemacampero.infrastructure.parsers.registry import registro_padrao
-from sistemacampero.infrastructure.parsers.shapefile import ler_perimetro
+from sistemacampero.infrastructure.parsers.shapefile import ler_linhas, ler_perimetro
 from sistemacampero.infrastructure.persistence.alertas import PostgresRepositorioAlertas
 from sistemacampero.infrastructure.persistence.cadastro import PostgresRepositorioCadastro
 from sistemacampero.infrastructure.persistence.contatos import PostgresAceites, PostgresContatos
@@ -160,6 +160,7 @@ def construir(settings: Settings, storage: Armazenamento | None = None) -> Conta
         leitor_cadastro=ler_cadastro_gen4,
         alertas=servico_alertas,
         leitor_contorno=ler_perimetro,
+        leitor_linhas=ler_linhas,
     )
     exportacao = ServicoExportacao(repo_exportacao, repo_ingestao, storage, regras.versao)
     executor.registrar(TipoJob.EXPORTAR, exportacao.executar)

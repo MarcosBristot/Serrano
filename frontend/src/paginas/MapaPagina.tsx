@@ -7,7 +7,7 @@ import { LegendaCalor, Mapa, type FC } from "../componentes/Mapa";
 import { Cabecalho, Erro } from "../componentes/ui";
 import { usePeriodo } from "../contextos/Sessao";
 import { api } from "../lib/api";
-import { useContornos } from "../lib/consultas";
+import { useContornos, useLinhasTalhao } from "../lib/consultas";
 import { num } from "../lib/formato";
 import type { Resumo } from "../lib/tipos";
 
@@ -15,8 +15,11 @@ export default function MapaPagina() {
   const { periodo } = usePeriodo();
   const [verCalor, setVerCalor] = useState(true);
   const [verTalhoes, setVerTalhoes] = useState(true);
+  const [verLinhas, setVerLinhas] = useState(true);
   const [tamanho, setTamanho] = useState(50);
   const contornos = useContornos();
+  const linhas = useLinhasTalhao(verLinhas);
+  const temLinhas = (linhas.data?.features.length ?? 0) > 0;
 
   // "Tudo" não tem datas: usa o primeiro e o último dia com operação.
   const resumo = useQuery({
@@ -36,7 +39,7 @@ export default function MapaPagina() {
       <Cabecalho titulo="Mapa" sub="Talhões e consumo de diesel por hectare, sobre imagem de satélite." acoes={<SeletorPeriodo />} />
       <div className="grid gap-6 xl:grid-cols-[1fr_300px]">
         <div className="cartao p-2">
-          <Mapa className="h-[68vh] min-h-[420px]" camadas={{ talhoes: verTalhoes ? contornos.dados : undefined, calor: verCalor ? calor.data : undefined }} />
+          <Mapa className="h-[68vh] min-h-[420px]" camadas={{ talhoes: verTalhoes ? contornos.dados : undefined, calor: verCalor ? calor.data : undefined, linhas: verLinhas ? linhas.data : undefined }} />
         </div>
         <div className="space-y-4">
           <div className="cartao p-5">
@@ -47,6 +50,18 @@ export default function MapaPagina() {
             <label className="flex items-center justify-between py-2 text-sm">
               Mapa de calor (L/ha) <input type="checkbox" checked={verCalor} onChange={(e) => setVerCalor(e.target.checked)} className="h-4 w-4 accent-folha-700" />
             </label>
+            {temLinhas && (
+              <label className="flex items-center justify-between py-2 text-sm">
+                <span>
+                  Cabeceiras e linhas-guia
+                  <span className="mt-1 flex gap-3 text-xs text-folha-900/60">
+                    <span className="flex items-center gap-1"><i className="inline-block h-0.5 w-4 bg-sky-300" aria-hidden="true" /> cabeceira</span>
+                    <span className="flex items-center gap-1"><i className="inline-block h-0.5 w-4 border-t-2 border-dashed border-violet-300" aria-hidden="true" /> linha-guia</span>
+                  </span>
+                </span>
+                <input type="checkbox" checked={verLinhas} onChange={(e) => setVerLinhas(e.target.checked)} className="h-4 w-4 accent-folha-700" />
+              </label>
+            )}
             <div className="mt-3">
               <span className="rotulo">Tamanho do hexágono</span>
               <select className="campo" value={tamanho} onChange={(e) => setTamanho(Number(e.target.value))}>

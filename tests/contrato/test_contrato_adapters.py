@@ -22,6 +22,7 @@ from sistemacampero.domain.telemetry import (
     ParsedSession,
 )
 from sistemacampero.infrastructure.parsers.registry import registro_padrao
+from tests.sinteticos import gs3
 from tests.sinteticos.jdl_builder import Cenario, construir
 
 
@@ -45,6 +46,13 @@ AMOSTRAS: dict[tuple[str, str], Amostras] = {
         lambda: construir(Cenario(minutos=30)),
         lambda: construir(Cenario(minutos=5, omitir=frozenset({"engine_rpm"}))),
         lambda: construir(Cenario(minutos=1, so_cabecalho=True)),
+    ),
+    # O GreenStar 3 não grava RPM: a amostra "sem canal" é a mesma operação, mais curta.
+    ("john_deere", "gs3"): Amostras(
+        "operacao.rcd",
+        lambda: gs3.construir(gs3.CenarioGs3(minutos=30)),
+        lambda: gs3.construir(gs3.CenarioGs3(minutos=5)),
+        lambda: gs3.construir(gs3.CenarioGs3(so_cabecalho=True)),
     ),
 }
 
@@ -88,7 +96,8 @@ def test_schema_tipos_e_unidades(adapter: TelemetryAdapter) -> None:
     assert len(df) == pytest.approx(30 * 60, abs=2)
     assert df["speed_kmh"].median() == pytest.approx(8.0, rel=0.01)  # km/h
     assert df["fuel_rate_lph"].median() == pytest.approx(22.0, rel=0.01)  # L/h
-    assert df["engine_rpm"].median() == pytest.approx(1800.0, rel=0.01)
+    if "engine_rpm" not in s.diagnostico.canais_ausentes:  # nem todo monitor grava RPM
+        assert df["engine_rpm"].median() == pytest.approx(1800.0, rel=0.01)
     assert df["gps_valid"].mean() > 0.95
     assert df.loc[df["gps_valid"], "lat"].between(-90, 90).all()
     assert s.metadados.inicio <= s.metadados.fim

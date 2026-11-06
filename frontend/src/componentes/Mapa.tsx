@@ -8,6 +8,7 @@ export interface Camadas {
   talhoes?: FC; // polígonos com properties.nome
   calor?: FC; // hexágonos com properties.l_ha
   trilha?: FC; // linhas com properties.tipo (trabalho|parado) + pontos de parada
+  linhas?: FC; // cabeceiras e linhas-guia do talhão (properties.tipo: cabeceira|linha_guia)
 }
 
 const ESTILO: maplibregl.StyleSpecification = {
@@ -53,6 +54,7 @@ export function Mapa({ camadas, className = "h-[520px]", enquadrar = true }: { c
     (m.getSource("talhoes") as maplibregl.GeoJSONSource).setData(c.talhoes ?? VAZIO);
     (m.getSource("calor") as maplibregl.GeoJSONSource).setData(c.calor ?? VAZIO);
     (m.getSource("trilha") as maplibregl.GeoJSONSource).setData(c.trilha ?? VAZIO);
+    (m.getSource("linhas") as maplibregl.GeoJSONSource).setData(c.linhas ?? VAZIO);
     const b = enquadrar ? limites([c.trilha, c.calor, c.talhoes]) : null;
     if (b) m.fitBounds(b, { padding: 48, maxZoom: 16, duration: 600 });
   };
@@ -71,6 +73,7 @@ export function Mapa({ camadas, className = "h-[520px]", enquadrar = true }: { c
       m.addSource("talhoes", { type: "geojson", data: VAZIO });
       m.addSource("calor", { type: "geojson", data: VAZIO });
       m.addSource("trilha", { type: "geojson", data: VAZIO });
+      m.addSource("linhas", { type: "geojson", data: VAZIO });
       m.addLayer({
         id: "calor", type: "fill", source: "calor",
         paint: {
@@ -84,6 +87,14 @@ export function Mapa({ camadas, className = "h-[520px]", enquadrar = true }: { c
         id: "talhoes-nome", type: "symbol", source: "talhoes",
         layout: { "text-field": ["get", "nome"], "text-size": 13, "text-font": ["Open Sans Semibold"] },
         paint: { "text-color": "#fff", "text-halo-color": "#1c3b1f", "text-halo-width": 1.6 },
+      });
+      m.addLayer({
+        id: "linhas", type: "line", source: "linhas",
+        paint: {
+          "line-color": ["match", ["get", "tipo"], "cabeceira", "#7dd3fc", "#c4b5fd"],
+          "line-width": ["match", ["get", "tipo"], "cabeceira", 2, 1.6],
+          "line-dasharray": ["match", ["get", "tipo"], "cabeceira", ["literal", [1]], ["literal", [3, 2]]],
+        },
       });
       m.addLayer({
         id: "trilha", type: "line", source: "trilha", filter: ["==", ["geometry-type"], "LineString"],
@@ -109,6 +120,13 @@ export function Mapa({ camadas, className = "h-[520px]", enquadrar = true }: { c
         const p = e.features?.[0]?.properties;
         if (p) new maplibregl.Popup().setLngLat(e.lngLat).setHTML(`<b>Parada de ${p.minutos} min</b><br/>${p.motor_ligado ? "motor ligado" : "motor desligado"}`).addTo(m);
       });
+      m.on("click", "linhas", (e) => {
+        const p = e.features?.[0]?.properties;
+        if (!p) return;
+        const rotulo = p.tipo === "cabeceira" ? "Cabeceira" : Number(p.subtipo) === 1 ? "Linha-guia reta (AB)" : "Linha-guia curva";
+        const quando = p.gravado_em ? new Date(String(p.gravado_em)).toLocaleDateString("pt-BR") : null;
+        new maplibregl.Popup().setLngLat(e.lngLat).setHTML(`<b>${rotulo}</b><br/>${p.talhao}${quando ? ` · gravada em ${quando}` : ""}`).addTo(m);
+      });
       pronto.current = true;
       aplicar();
     });
@@ -120,7 +138,7 @@ export function Mapa({ camadas, className = "h-[520px]", enquadrar = true }: { c
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(aplicar, [camadas.talhoes, camadas.calor, camadas.trilha]);
+  useEffect(aplicar, [camadas.talhoes, camadas.calor, camadas.trilha, camadas.linhas]);
 
   return <div ref={div} className={`overflow-hidden rounded-2xl ${className}`} />;
 }

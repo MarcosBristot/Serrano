@@ -35,6 +35,7 @@ from sistemacampero.domain.ingestao import (
     TipoJob,
     caminho_bruto,
     caminho_limpo,
+    empacotar_rcd,
     nome_para_exibicao,
     tipo_do_arquivo,
 )
@@ -44,6 +45,7 @@ from sistemacampero.domain.services.geo import LocalizadorDeTalhoes
 from sistemacampero.domain.telemetry import EmptyFile, ParseContext
 
 logger = logging.getLogger(__name__)
+_LINHAS_OMNI = {"cabeceira": "_headland", "linha_guia": "_runline"}
 
 _CONTENT_TYPE = {
     TipoArquivo.JDL: "application/octet-stream",
@@ -51,6 +53,7 @@ _CONTENT_TYPE = {
     TipoArquivo.MASTERDATA: "application/xml",
     TipoArquivo.GJSON: "application/geo+json",
     TipoArquivo.CONTORNO: "application/octet-stream",
+    TipoArquivo.RCD: "application/octet-stream",
 }
 _ASSINATURA = {TipoArquivo.JDL: b"\x0d", TipoArquivo.ZIP: b"PK\x03\x04"}
 
@@ -121,6 +124,11 @@ class ServicoIngestao:
     ) -> ResultadoUpload:
         """Um arquivo por chamada (.jdl ou .zip). Reenvio do mesmo conteúdo = duplicado."""
         tipo = tipo_do_arquivo(nome)
+        if tipo is TipoArquivo.RCD:
+            raise Invalido(
+                "Arquivo da colheitadeira (GreenStar 3): envie a pasta GS3_2630 inteira em .zip.",
+                codigo="FORMATO_NAO_SUPORTADO",
+            )
         if tipo not in (TipoArquivo.JDL, TipoArquivo.ZIP):
             raise Invalido(
                 "Envie um arquivo .jdl ou .zip da pasta do monitor.",
@@ -154,6 +162,8 @@ class ServicoIngestao:
 
 LeitorCadastro = Callable[[bytes, dict[str, bytes]], ImportacaoCadastro]
 LeitorContorno = Callable[[bytes, bytes | None], MultiPolygon]
+# (shp, dbf, prj, tipo) -> [{"tipo", "subtipo", "gravado_em", "geom": LineString}]
+LeitorLinhas = Callable[[bytes, bytes | None, bytes | None, str], list[dict[str, Any]]]
 
 
 class ExecutorDeJobs:
@@ -172,8 +182,10 @@ class ExecutorDeJobs:
         alertas: ServicoAlertas | None = None,
         limites_zip: zip_seguro.LimitesZip | None = None,
         leitor_contorno: LeitorContorno | None = None,
+        leitor_linhas: LeitorLinhas | None = None,
     ) -> None:
         self._leitor_contorno = leitor_contorno
+        self._leitor_linhas = leitor_linhas
         self._alertas = alertas
         self._repo = repo
         self._cadastro = cadastro
@@ -280,12 +292,14 @@ class ExecutorDeJobs:
             return {"status": "arquivo_inexistente"}
         self._repo.marcar_arquivo(org, zip_id, StatusArquivo.PROCESSANDO, None)
         lote_id = arquivo.get("lote_id") or job.lote_id
-        contagem = {"jdl": 0, "masterdata": 0, "gjson": 0, "contorno": 0, "duplicados": 0}
+        contagem = {"jdl": 0, "masterdata": 0, "gjson": 0, "contorno": 0, "rcd": 0, "duplicados": 0}
+        metades_rcd: dict[str, dict[str, bytes]] = {}  # GS3: caminho sem extensão -> .fdl/.fdd
         masterdata: list[UUID] = []
         # nome no zip -> arquivo (novo ou já existente): o .gjson repetido de outro pendrive
         # tem como "pai" o primeiro zip, então a relação vai explícita no payload.
         gjson: dict[str, str] = {}
-        perimetros: dict[str, str] = {}  # pasta do talhão no zip -> arquivo do .shp
+        # pasta do talhão no zip -> {"_perimeter.shp": arquivo, "_headland.dbf": arquivo, ...}
+        shapefiles: dict[str, dict[str, str]] = {}
         projecoes: dict[str, str] = {}  # pasta do talhão no zip -> texto do .prj
         with tempfile.TemporaryFile() as arquivo_tmp:
             tmp = cast(BinaryIO, arquivo_tmp)
@@ -303,9 +317,15 @@ class ExecutorDeJobs:
                     ):
                         projecoes[pasta] = entrada.conteudo.decode("latin-1")[:2000]
                         continue
+                    if entrada.tipo is TipoArquivo.RCD:
+                        par = self._par_rcd(metades_rcd, entrada)
+                        if par is None:
+                            continue
+                        entrada = par
                     reg = self._registrar_entrada(org, zip_id, lote_id, arquivo, entrada)
                     if entrada.tipo is TipoArquivo.CONTORNO:
-                        perimetros[pasta] = str(reg.arquivo_id)
+                        base = posixpath.basename(entrada.caminho_no_zip.replace("\\", "/"))
+                        shapefiles.setdefault(pasta, {})[base.lower()] = str(reg.arquivo_id)
                     if entrada.tipo is TipoArquivo.MASTERDATA:
                         masterdata.append(reg.arquivo_id)
                     elif entrada.tipo is TipoArquivo.GJSON:
@@ -326,7 +346,7 @@ class ExecutorDeJobs:
                 lote_id,
                 f"importar_gen4:{zip_id}:{md_id}",
             )
-        if perimetros:
+        if shapefiles:
             self._repo.enfileirar(
                 org,
                 TipoJob.IMPORTAR_CONTORNOS,
@@ -334,10 +354,15 @@ class ExecutorDeJobs:
                     "contornos": [
                         {
                             "talhao": posixpath.basename(pasta).replace("_", " ").strip(),
-                            "arquivo_id": ident,
+                            "arquivo_id": arqs.get("_perimeter.shp"),
                             "prj": projecoes.get(pasta, ""),
+                            "linhas": {
+                                tipo: {"shp": arqs[f"{base}.shp"], "dbf": arqs.get(f"{base}.dbf")}
+                                for tipo, base in _LINHAS_OMNI.items()
+                                if f"{base}.shp" in arqs
+                            },
                         }
-                        for pasta, ident in sorted(perimetros.items())
+                        for pasta, arqs in sorted(shapefiles.items())
                     ]
                 },
                 lote_id,
@@ -348,14 +373,20 @@ class ExecutorDeJobs:
 
     # ------------------------------------------------------------ contornos em shapefile
     def _importar_contornos(self, job: Job, controle: ControleJob) -> dict[str, Any]:
-        """Perímetros (ex.: OMNI) casados com os talhões pelo nome; contorno existente fica."""
+        """Perímetros (ex.: OMNI) casados com os talhões pelo nome; contorno existente fica.
+
+        Cabeceira e linhas-guia da mesma pasta substituem as anteriores do talhão.
+        """
         if self._leitor_contorno is None:
             return {"status": "sem_leitor_de_contorno"}
         org = job.organizacao_id
         itens: list[tuple[str, MultiPolygon]] = []
         lidos: list[UUID] = []
         rejeitados = 0
+        linhas = self._ler_linhas(org, job.payload.get("contornos", []), lidos)
         for c in job.payload.get("contornos", []):
+            if not c.get("arquivo_id"):
+                continue
             arquivo = self._repo.obter_arquivo(org, UUID(c["arquivo_id"]))
             if arquivo is None:
                 continue
@@ -374,6 +405,7 @@ class ExecutorDeJobs:
             lidos.append(arquivo["id"])
         controle.verificar()
         resumo = self._cadastro.importar_contornos(org, itens)
+        resumo["linhas"] = self._cadastro.importar_linhas(org, linhas) if linhas else 0
         relocalizadas = 0
         if resumo["contornos_novos"] or resumo["talhoes_criados"]:
             relocalizadas = self._servico_cadastro.relocalizar(
@@ -387,6 +419,40 @@ class ExecutorDeJobs:
             "rejeitados": rejeitados,
             "sessoes_relocalizadas": relocalizadas,
         }
+
+    def _ler_linhas(
+        self, org: UUID, contornos: list[dict[str, Any]], lidos: list[UUID]
+    ) -> list[tuple[str, list[dict[str, Any]]]]:
+        """Por talhão (nome da pasta): cabeceira e linhas-guia lidas dos shapefiles."""
+        if self._leitor_linhas is None:
+            return []
+        saida: list[tuple[str, list[dict[str, Any]]]] = []
+        for c in contornos:
+            prj = c["prj"].encode("latin-1") if c.get("prj") else None
+            do_talhao: list[dict[str, Any]] = []
+            for tipo, arqs in (c.get("linhas") or {}).items():
+                shp = self._repo.obter_arquivo(org, UUID(arqs["shp"]))
+                if shp is None:
+                    continue
+                dbf = self._repo.obter_arquivo(org, UUID(arqs["dbf"])) if arqs.get("dbf") else None
+                try:
+                    do_talhao += self._leitor_linhas(
+                        self._storage.ler(BUCKET_BRUTOS, str(shp["caminho_storage"])),
+                        self._storage.ler(BUCKET_BRUTOS, str(dbf["caminho_storage"]))
+                        if dbf
+                        else None,
+                        prj,
+                        tipo,
+                    )
+                except Invalido as exc:
+                    self._repo.marcar_arquivo(
+                        org, shp["id"], StatusArquivo.REJEITADO, f"{exc.codigo}: {exc.mensagem}"
+                    )
+                    continue
+                lidos += [shp["id"], *([dbf["id"]] if dbf else [])]
+            if c.get("linhas"):
+                saida.append((str(c["talhao"]), do_talhao))
+        return saida
 
     # ------------------------------------------------------------ cadastro Gen4
     def _importar_gen4(self, job: Job, controle: ControleJob) -> dict[str, Any]:
@@ -434,6 +500,24 @@ class ExecutorDeJobs:
             "sessoes_relocalizadas": relocalizadas,
         }
 
+    @staticmethod
+    def _par_rcd(
+        metades: dict[str, dict[str, bytes]], entrada: zip_seguro.EntradaZip
+    ) -> zip_seguro.EntradaZip | None:
+        """Guarda a metade do par do GreenStar 3 até chegar a outra; devolve o pacote pronto."""
+        raiz, ext = posixpath.splitext(entrada.caminho_no_zip.replace("\\", "/"))
+        par = metades.setdefault(raiz, {})
+        par[ext.lower()] = entrada.conteudo
+        if ".fdl" not in par or ".fdd" not in par:
+            return None
+        del metades[raiz]
+        return zip_seguro.EntradaZip(
+            f"{posixpath.basename(raiz)}.rcd",
+            f"{raiz}.rcd",
+            TipoArquivo.RCD,
+            empacotar_rcd(par[".fdl"], par[".fdd"]),
+        )
+
     def _registrar_entrada(
         self,
         org: UUID,
@@ -449,7 +533,8 @@ class ExecutorDeJobs:
                 BUCKET_BRUTOS, caminho, io.BytesIO(entrada.conteudo), _CONTENT_TYPE[entrada.tipo]
             )
         # MasterData/SpatialFiles ficam guardados para o importador Gen4 (M4).
-        job = TipoJob.PROCESSAR_ARQUIVO if entrada.tipo is TipoArquivo.JDL else None
+        processa = entrada.tipo in (TipoArquivo.JDL, TipoArquivo.RCD)
+        job = TipoJob.PROCESSAR_ARQUIVO if processa else None
         return self._repo.registrar_arquivo(
             NovoArquivo(
                 organizacao_id=org,
@@ -459,7 +544,10 @@ class ExecutorDeJobs:
                 tamanho_bytes=len(entrada.conteudo),
                 caminho_storage=caminho,
                 marca=arquivo_zip.get("marca"),
-                tecnologia=arquivo_zip.get("tecnologia"),
+                # O .zip vem marcado como Gen4 (trator); o par .fdl/.fdd é do GreenStar 3.
+                tecnologia=(
+                    "gs3" if entrada.tipo is TipoArquivo.RCD else arquivo_zip.get("tecnologia")
+                ),
                 lote_id=lote_id,
                 arquivo_pai_id=zip_id,
             ),

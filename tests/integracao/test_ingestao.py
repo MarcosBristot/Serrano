@@ -198,6 +198,7 @@ def test_zip_do_pendrive(
         "masterdata": 1,
         "gjson": 0,
         "contorno": 0,
+        "rcd": 0,
         "duplicados": 1,
     }
 

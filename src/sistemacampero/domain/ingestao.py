@@ -57,10 +57,23 @@ class TipoArquivo(StrEnum):
     ZIP = "zip"
     MASTERDATA = "masterdata"
     GJSON = "gjson"
-    CONTORNO = "contorno"  # perímetro de talhão em shapefile (ex.: OMNI do pulverizador)
+    CONTORNO = "contorno"  # shapefile do talhão (ex.: OMNI): perímetro, cabeceira, linhas-guia
+    RCD = "rcd"  # GreenStar 3: par .fdl + .fdd de uma operação (empacotado na expansão do zip)
 
 
 _EXTENSOES = {".jdl": TipoArquivo.JDL, ".zip": TipoArquivo.ZIP, ".gjson": TipoArquivo.GJSON}
+
+# Arquivos do OMNI por talhão: o .prj vai no payload; .shp e .dbf ficam guardados.
+SHAPEFILES_TALHAO = frozenset(
+    {
+        "_perimeter.shp",
+        "_perimeter.prj",
+        "_headland.shp",
+        "_headland.dbf",
+        "_runline.shp",
+        "_runline.dbf",
+    }
+)
 
 
 def tipo_do_arquivo(nome: str) -> TipoArquivo | None:
@@ -68,10 +81,34 @@ def tipo_do_arquivo(nome: str) -> TipoArquivo | None:
     base = posixpath.basename(nome.replace("\\", "/"))
     if base.lower() == "masterdata.xml":
         return TipoArquivo.MASTERDATA
-    if base.lower() in ("_perimeter.shp", "_perimeter.prj"):  # OMNI: Data/<cliente>/<talhão>/
+    if base.lower() in SHAPEFILES_TALHAO:  # OMNI: Data/<cliente>/<talhão>/
         return TipoArquivo.CONTORNO
     _, ext = posixpath.splitext(base.lower())
+    if ext in (".fdl", ".fdd"):  # GS3: RCD/EIC/Documentation/<xx>/<uuid>.fd?
+        return TipoArquivo.RCD
     return _EXTENSOES.get(ext)
+
+
+_MAGICO_RCD = b"SERRANO-RCD1\n"
+
+
+def empacotar_rcd(fdl: bytes, fdd: bytes) -> bytes:
+    """Um arquivo só para o par do GreenStar 3: o .fdl dá o significado do .fdd."""
+    return _MAGICO_RCD + len(fdl).to_bytes(4, "little") + fdl + fdd
+
+
+def eh_pacote_rcd(cabeca: bytes) -> bool:
+    return cabeca.startswith(_MAGICO_RCD)
+
+
+def desempacotar_rcd(pacote: bytes) -> tuple[bytes, bytes]:
+    if not eh_pacote_rcd(pacote) or len(pacote) < len(_MAGICO_RCD) + 4:
+        raise ValueError("pacote GS3 inválido")
+    i = len(_MAGICO_RCD)
+    n = int.from_bytes(pacote[i : i + 4], "little")
+    if i + 4 + n > len(pacote):
+        raise ValueError("pacote GS3 truncado")
+    return pacote[i + 4 : i + 4 + n], pacote[i + 4 + n :]
 
 
 _INSEGURO = re.compile(r"[^\w.\-\[\]{}() ,]+", re.UNICODE)

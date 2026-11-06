@@ -253,6 +253,60 @@ class PostgresRepositorioCadastro:
             "preservados": preservados,
         }
 
+    def importar_linhas(self, org: UUID, itens: list[tuple[str, list[dict[str, Any]]]]) -> int:
+        """Cabeceira e linhas-guia do OMNI por talhão (casado pelo nome normalizado).
+
+        Reimportar substitui as linhas do OMNI daquele talhão; talhão desconhecido é ignorado
+        (o perímetro, quando existe, já o criou antes nesta mesma importação).
+        """
+        gravadas = 0
+        with self._db.transacao(org) as conn:
+            por_nome = {
+                nome_normalizado(str(t["nome"])): t["id"]
+                for t in conn.execute(
+                    "select id, nome from public.talhoes where organizacao_id = %s"
+                    " order by criado_em desc",
+                    (org,),
+                ).fetchall()
+            }
+            for nome, linhas in itens:
+                talhao = por_nome.get(nome_normalizado(nome))
+                if talhao is None:
+                    continue
+                conn.execute(
+                    "delete from public.linhas_talhao where talhao_id = %s and origem = 'omni'",
+                    (talhao,),
+                )
+                for x in linhas:
+                    conn.execute(
+                        "insert into public.linhas_talhao (organizacao_id, talhao_id, tipo,"
+                        " subtipo, gravado_em, geometria)"
+                        " values (%s, %s, %s, %s, %s, extensions.st_geomfromwkb(%s, 4326))",
+                        (org, talhao, x["tipo"], x["subtipo"], x["gravado_em"], x["geom"].wkb),
+                    )
+                    gravadas += 1
+        return gravadas
+
+    def linhas_geojson(self, org: UUID, talhao_id: UUID | None = None) -> dict[str, Any]:
+        """Camada do mapa: cabeceiras e linhas-guia dos talhões ativos."""
+        with self._db.transacao(org) as conn:
+            linha = conn.execute(
+                """
+                select coalesce(json_agg(json_build_object(
+                    'type', 'Feature',
+                    'geometry', extensions.st_asgeojson(l.geometria, 7)::json,
+                    'properties', json_build_object('tipo', l.tipo, 'subtipo', l.subtipo,
+                        'talhao', t.nome, 'gravado_em', l.gravado_em)
+                ) order by l.tipo, l.gravado_em), '[]'::json) as features
+                from public.linhas_talhao l
+                join public.talhoes t on t.id = l.talhao_id and t.ativo
+                where l.organizacao_id = %s and (%s::uuid is null or l.talhao_id = %s)
+                """,
+                (org, talhao_id, talhao_id),
+            ).fetchone()
+        assert linha is not None
+        return {"type": "FeatureCollection", "features": linha["features"]}
+
     @staticmethod
     def _upsert(conn: Conexao, tabela: str, org: UUID, guid: str, campos: dict[str, Any]) -> UUID:
         nomes = ["organizacao_id", "external_guid", *campos]

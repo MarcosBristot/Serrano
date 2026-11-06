@@ -5,7 +5,7 @@ import { Link, useParams } from "react-router-dom";
 import { Mapa, type FC } from "../componentes/Mapa";
 import { Carregando, Erro, Kpi, seloQualidade } from "../componentes/ui";
 import { api } from "../lib/api";
-import { useContornos } from "../lib/consultas";
+import { useContornos, useLinhasTalhao } from "../lib/consultas";
 import { dataHora, horas, num, pct, rs } from "../lib/formato";
 import type { JornadaDetalhe as Detalhe } from "../lib/tipos";
 
@@ -18,6 +18,7 @@ export default function JornadaDetalhe() {
   const j = useQuery({ queryKey: ["jornada", id], queryFn: () => api<Detalhe>(`/jornadas/${id}`) });
   const trilha = useQuery({ queryKey: ["trilha-jornada", id], queryFn: () => api<FC>(`/jornadas/${id}/track`, { params: { max_pontos: 4000 } }) });
   const contornos = useContornos();
+  const linhas = useLinhasTalhao();
 
   if (j.isLoading) return <Carregando />;
   if (j.error) return <Erro erro={j.error} />;
@@ -48,7 +49,7 @@ export default function JornadaDetalhe() {
       <div className="mt-6 grid gap-6 xl:grid-cols-[1fr_360px]">
         <div className="cartao p-2">
           {trilha.isLoading ? <Carregando texto="Carregando trajeto…" /> : (
-            <Mapa className="h-[56vh] min-h-[380px]" camadas={{ trilha: trilha.data, talhoes: contornos.dados }} />
+            <Mapa className="h-[56vh] min-h-[380px]" camadas={{ trilha: trilha.data, talhoes: contornos.dados, linhas: linhas.data }} />
           )}
         </div>
         <div className="cartao p-5">
