@@ -74,3 +74,18 @@
 .maplibregl-popup-tip { border-top-color: #132a18 !important; border-bottom-color: #132a18 !important; }
 .recharts-tooltip-wrapper .recharts-default-tooltip { @apply rounded-xl !border-white/10 !bg-noite-800/95 text-folha-950; }
 .recharts-legend-item-text { color: rgba(226, 238, 220, 0.8) !important; }
+
+/* Impressão do fechamento: fundo branco e a paleta clara de volta (o tema escuro é invertido). */
+@media print {
+  :root {
+    --folha-50: 241 248 241; --folha-100: 221 239 220; --folha-200: 188 223 186; --folha-300: 143 199 141;
+    --folha-400: 95 169 93; --folha-500: 63 140 62; --folha-600: 47 112 48; --folha-700: 39 90 41;
+    --folha-800: 34 72 36; --folha-900: 28 59 31; --folha-950: 13 32 17;
+  }
+  body { background: #fff !important; }
+  aside, header, .nao-imprimir, .maplibregl-ctrl { display: none !important; }
+  main { padding: 0 !important; max-width: none !important; }
+  .lg\:pl-64 { padding-left: 0 !important; }
+  .cartao, .cartao-destaque { background: #fff !important; border-color: #d6e4d3 !important; box-shadow: none !important; backdrop-filter: none !important; break-inside: avoid; }
+  .tabela th { background: #f1f8f1 !important; }
+}

@@ -109,8 +109,11 @@ def construir_fdl() -> bytes:
         '<rcdsetup:Field name="Talhao Teste" erid="{6432e28f-0000-1000-786b-e1e1e1464fe0}" />'
         '<rcdsetup:Machine serialNumber="1CQS540ATG0000001" />'
         '<rcdsetup:MachineModel name="S540" />'
+        '<rcdsetup:Crop name="Soja"><rcdsetup:CropVariety'
+        ' erid="{5bd857bf-0000-1000-403a-e1e1e1464fe0}" name="Zeus" /></rcdsetup:Crop>'
         '<rcdsetup:ImplementModel name="625F" />'
         f'<LogTaskRegion timeStamp="{ts}" timeColumnID="ElapsedTime" logInterval="1000">'
+        '<ProductRef eridRef="{5bd857bf-0000-1000-403a-e1e1e1464fe0}" />'
         f"{secoes}{colunas}"
         '<LogDataBlock logDataProcessor="EvenByteDelta" /></LogTaskRegion></RCDLogFile>'
     ).encode("latin-1")

@@ -74,7 +74,8 @@ def test_visao_por_maquina_separa_trator_e_colheitadeira(
     assert set(visao) == {"trator", "colheitadeira"}
     colhe = visao["colheitadeira"]
     assert colhe["modelo"] == "S540"
-    assert colhe["massa_kg"] == pytest.approx(4.0 * 30 * 60, rel=0.01)
+    # massa seca: 17,5 % de umidade descontada até os 14 % da soja
+    assert colhe["massa_kg"] == pytest.approx(4.0 * 30 * 60 * 82.5 / 86, rel=0.01)
     assert colhe["motor_h"] == pytest.approx(0.5, abs=0.02)
     assert colhe["t_ha"] and colhe["t_ha"] > 0
     assert visao["trator"]["massa_kg"] is None
@@ -114,3 +115,46 @@ def test_agrupar_junta_os_repetidos_sem_apagar(client: TestClient, org: dict[str
     )
     assert ativos == ["Bira", "Coxilha Grande", "Mãe"]
     assert len(client.get("/api/v1/talhoes", headers=h).json()) == 6  # nada apagado
+
+
+def test_fechamento_da_safra_por_talhao(
+    client: TestClient, worker: Worker, org: dict[str, Any]
+) -> None:
+    h = org["auth"]
+    # Talhão cobrindo a trilha sintética (anda para o norte a partir de -28,1 / -52,9)
+    contorno = [
+        [-52.91, -28.11],
+        [-52.89, -28.11],
+        [-52.89, -28.0],
+        [-52.91, -28.0],
+        [-52.91, -28.11],
+    ]
+    t = client.post(
+        "/api/v1/talhoes",
+        json={"nome": "Lavoura Norte", "geometria": {"type": "Polygon", "coordinates": [contorno]}},
+        headers=h,
+    ).json()
+    pacote = {
+        f"{PASTA}/6363bd9a.fdl": gs3.construir_fdl(),
+        f"{PASTA}/6363bd9a.fdd": gs3.construir_fdd(gs3.CenarioGs3(minutos=30, massa_kg_s=4.0)),
+    }
+    upload(client, org, zipar(pacote), nome="colheitadeira.zip")
+    drenar(worker)
+
+    safras = client.get("/api/v1/safras", headers=h).json()
+    assert [(s["safra"], s["cultura"]) for s in safras] == [("2025/26", "soja")]
+    f = client.get(
+        "/api/v1/safras/fechamento", params={"safra": "2025/26", "cultura": "soja"}, headers=h
+    ).json()
+    [talhao] = f["talhoes"]
+    assert talhao["talhao_id"] == t["id"] and talhao["variedades"] == ["Zeus"]
+    area = 8 / 3.6 * 30 * 60 * 7.6 / 10_000  # 8 km/h por 30 min com 7,6 m
+    sacas = 4.0 * 30 * 60 * 82.5 / 86 / 60
+    assert talhao["area_colhida_ha"] == pytest.approx(area, rel=0.02)
+    assert talhao["sc_ha"] == pytest.approx(sacas / area, rel=0.03)
+    assert talhao["litros"] == pytest.approx(22 * 0.5, rel=0.05)
+    assert talhao["operacoes_maquina"][0]["operacao"] == "colheita"
+    assert f["sacas"] == pytest.approx(sacas, rel=0.01)
+
+    nada = client.get("/api/v1/safras/fechamento", params={"safra": "1999/00"}, headers=h)
+    assert nada.status_code == 404

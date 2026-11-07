@@ -42,7 +42,8 @@ Uma sequência de **blocos** (um por `LogTaskRegion` do `.fdl`, na mesma ordem).
   assim que o rumo passa de 359° para 0°).
 * Coluna crua fora de A e de B fica **ausente** naquele registro.
 * `omitidas` é uma máscara das primeiras colunas que não vêm (registro de **evento**, de menos de
-  1 s, quando a plataforma sobe ou desce): a coluna fica nula e o próximo delta parte de zero.
+  1 s, quando a plataforma sobe ou desce): a coluna fica nula e o próximo delta parte do **valor
+  físico zero** (não da base do bloco; com base de 13 % de umidade o erro seria de 13 pontos).
 * Valor físico = `base + soma_dos_deltas × resolução`.
 
 ## Colunas (S540, plataforma 625F de 7,6 m)
@@ -62,9 +63,15 @@ Conferência com a realidade (trigo, Coxilha Grande, 2022): 12,7 h, 528 L (41,5 
 39,3 ha a 4,4 km/h e 200,6 t de massa úmida a 17,9 % de umidade (5,1 t/ha). A plataforma fica
 ligada 96 % do tempo a 4,4 km/h e levantada nas manobras a ~7 km/h.
 
+## Validação da produtividade
+
+Massa seca (umidade de comercialização: soja 14 %, trigo 13 %) sobre a área colhida com a
+plataforma baixa, mediana por safra: soja 32,6 (21/22, seca), 29,5 (22/23, seca), 79,2 (23/24),
+51,0 (24/25, seca) e 81,5 sc/ha (25/26); trigo 70,2 (2022), 34,2 (2023, El Niño), 59,5 (2024) e
+68,9 sc/ha (2025). Bate com o histórico do RS.
+
 ## Em aberto
 
-* Coluna de rendimento e umidade no schema universal (mapa de produtividade, t/ha por talhão).
-* Área só com a plataforma baixa (hoje a cobertura conta também as manobras de cabeceira).
+* Mapa de produtividade ponto a ponto (hoje o resumo é por operação).
 * Significado do 2º `float64` das colunas e do `u32` do cabeçalho do registro.
 * `.fdr`, `.fdshape` e `.pth`.

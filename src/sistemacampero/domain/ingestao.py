@@ -59,6 +59,7 @@ class TipoArquivo(StrEnum):
     GJSON = "gjson"
     CONTORNO = "contorno"  # shapefile do talhão (ex.: OMNI): perímetro, cabeceira, linhas-guia
     RCD = "rcd"  # GreenStar 3: par .fdl + .fdd de uma operação (empacotado na expansão do zip)
+    ISOXML = "isoxml"  # ISOBUS: TASKDATA.XML + um TLG (.XML/.BIN), de qualquer marca
 
 
 _EXTENSOES = {".jdl": TipoArquivo.JDL, ".zip": TipoArquivo.ZIP, ".gjson": TipoArquivo.GJSON}
@@ -86,10 +87,51 @@ def tipo_do_arquivo(nome: str) -> TipoArquivo | None:
     _, ext = posixpath.splitext(base.lower())
     if ext in (".fdl", ".fdd"):  # GS3: RCD/EIC/Documentation/<xx>/<uuid>.fd?
         return TipoArquivo.RCD
+    if base.lower() == "taskdata.xml" or _TLG.fullmatch(base.lower()):
+        return TipoArquivo.ISOXML
     return _EXTENSOES.get(ext)
 
 
 _MAGICO_RCD = b"SERRANO-RCD1\n"
+_MAGICO_ISOXML = b"SERRANO-ISOXML1\n"
+_TLG = re.compile(r"tlg\d{5}\.(xml|bin)")
+
+
+def empacotar_isoxml(nome_tlg: str, taskdata: bytes, cabecalho: bytes, binario: bytes) -> bytes:
+    """Um TLG com o TASKDATA.XML da mesma pasta (é ele que diz talhão, cliente e máquina)."""
+    nome = nome_tlg.encode()
+    return (
+        _MAGICO_ISOXML
+        + len(nome).to_bytes(2, "little")
+        + nome
+        + len(taskdata).to_bytes(4, "little")
+        + taskdata
+        + len(cabecalho).to_bytes(4, "little")
+        + cabecalho
+        + binario
+    )
+
+
+def eh_pacote_isoxml(cabeca: bytes) -> bool:
+    return cabeca.startswith(_MAGICO_ISOXML)
+
+
+def desempacotar_isoxml(pacote: bytes) -> tuple[str, bytes, bytes, bytes]:
+    """-> (nome do TLG, TASKDATA.XML, TLG.XML, TLG.BIN)."""
+    if not eh_pacote_isoxml(pacote):
+        raise ValueError("pacote ISOXML inválido")
+    i = len(_MAGICO_ISOXML)
+    partes: list[bytes] = []
+    n = int.from_bytes(pacote[i : i + 2], "little")
+    partes.append(pacote[i + 2 : i + 2 + n])
+    i += 2 + n
+    for _ in range(2):
+        n = int.from_bytes(pacote[i : i + 4], "little")
+        if i + 4 + n > len(pacote):
+            raise ValueError("pacote ISOXML truncado")
+        partes.append(pacote[i + 4 : i + 4 + n])
+        i += 4 + n
+    return partes[0].decode(), partes[1], partes[2], pacote[i:]
 
 
 def empacotar_rcd(fdl: bytes, fdd: bytes) -> bytes:

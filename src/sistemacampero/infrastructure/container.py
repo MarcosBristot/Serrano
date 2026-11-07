@@ -8,6 +8,7 @@ from sistemacampero.application.alertas import ServicoAlertas, ServicoNotificaco
 from sistemacampero.application.cadastro import ServicoCadastro
 from sistemacampero.application.equipe import ServicoEquipe
 from sistemacampero.application.exportacao import ServicoExportacao
+from sistemacampero.application.fechamento import ServicoFechamento
 from sistemacampero.application.ingestao import ExecutorDeJobs, ServicoIngestao
 from sistemacampero.application.kpis import ServicoKpis
 from sistemacampero.application.processamento import ProcessadorDeArquivo
@@ -27,6 +28,7 @@ from sistemacampero.infrastructure.persistence.contatos import PostgresAceites, 
 from sistemacampero.infrastructure.persistence.db import Database
 from sistemacampero.infrastructure.persistence.equipe import PostgresRepositorioEquipe
 from sistemacampero.infrastructure.persistence.exportacao import PostgresExportacoes
+from sistemacampero.infrastructure.persistence.fechamento import PostgresFechamento
 from sistemacampero.infrastructure.persistence.ingestao import (
     PostgresFilaDeJobs,
     PostgresRepositorioIngestao,
@@ -90,6 +92,7 @@ class Container:
     acessos: RegistrosDeAcesso | None = None
     exportacao: ServicoExportacao | None = None
     db: Database | None = None
+    fechamento: ServicoFechamento | None = None
 
     def fechar(self) -> None:
         if self.db is not None:
@@ -191,4 +194,5 @@ def construir(settings: Settings, storage: Armazenamento | None = None) -> Conta
         acessos=RegistrosDeAcesso(db),
         equipe=ServicoEquipe(repo_equipe, notificador.convite if smtp else None),
         db=db,
+        fechamento=ServicoFechamento(PostgresFechamento(db), regras.versao),
     )

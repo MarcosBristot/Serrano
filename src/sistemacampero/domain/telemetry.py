@@ -18,6 +18,7 @@ from typing import Any
 
 import pandas as pd
 
+from sistemacampero.domain.colheita import Colheita
 from sistemacampero.domain.errors import Invalido
 
 #: Colunas do DataFrame de amostras (ordem = ordem de persistência). Os nomes das medidas
@@ -125,6 +126,7 @@ class ParsedSession:
     metadados: MetadadosSessao
     amostras: pd.DataFrame
     diagnostico: Diagnostico
+    colheita: Colheita | None = None  # só monitores de colheitadeira
 
 
 @dataclass(frozen=True, slots=True)

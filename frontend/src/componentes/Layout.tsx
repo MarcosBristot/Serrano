@@ -1,6 +1,6 @@
 import {
   BarChart3, Bell, ChevronDown, FileText, Home, ListChecks, LogOut, Map, Menu, Settings, Sprout, Tractor,
-  Upload, X,
+  Upload, Wheat, X,
 } from "lucide-react";
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
@@ -14,6 +14,7 @@ const MENU: { grupo?: string; itens: { para: string; rotulo: string; icone: type
   {
     itens: [
       { para: "/", rotulo: "Resumo", icone: Home },
+      { para: "/safras", rotulo: "Safras", icone: Wheat },
       { para: "/maquinas", rotulo: "Máquinas", icone: Tractor },
       { para: "/talhoes", rotulo: "Talhões", icone: Sprout },
       { para: "/mapa", rotulo: "Mapa", icone: Map },

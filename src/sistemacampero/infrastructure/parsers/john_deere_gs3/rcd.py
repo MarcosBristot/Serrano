@@ -13,7 +13,7 @@ e registros de ~1 s:
   absoluto no fim do registro; em ``A`` (só colunas "cruas") repete o anterior;
 * campos fixos, na ordem das colunas: delta ``i16`` (tipo 3) ou ``i32`` (tipo 4) e estado
   absoluto ``u16`` (enumerados das 8 primeiras colunas). Os bits de ``omitidas`` tiram as
-  primeiras colunas do registro (registro de evento) e a coluna recomeça do zero;
+  primeiras colunas do registro (registro de evento) e o próximo delta parte do valor físico zero;
 * ``n_controle`` valores marcados de controle e um valor marcado (``u16 tipo, u16 tamanho``)
   por bit de ``B``.
 """
@@ -129,11 +129,14 @@ def _ler_fdd(d: bytes) -> list[Bloco]:
         a = int.from_bytes(d[i + 8 : i + 12], "little")
         b = int.from_bytes(d[i + 12 : i + 15], "little")
         i += 15
+        nulas: set[int] = set()
         for k, c in enumerate(cols):
             if c.cru or (k >= _PRIMEIRAS and (b >> (k - _PRIMEIRAS)) & 1):
                 continue
             if k < _PRIMEIRAS and (omitidas >> k) & 1:
-                acum[k] = 0
+                # Depois do evento o delta recomeça do valor físico zero (não da base do bloco).
+                acum[k] = -round(c.base / c.resolucao) if c.tipo != 1 and c.resolucao else 0
+                nulas.add(k)
                 continue
             if c.tipo == 4:
                 v = struct.unpack_from("<i", d, i)[0]
@@ -160,7 +163,9 @@ def _ler_fdd(d: bytes) -> list[Bloco]:
         for k, c in enumerate(cols):
             if c.cru:
                 continue
-            if c.tipo == 1:
+            if k in nulas:
+                valores[k] = None
+            elif c.tipo == 1:
                 valores[k] = acum[k] if 0 <= acum[k] < len(c.opcoes) else None
             else:
                 valores[k] = c.base + acum[k] * c.resolucao
@@ -178,7 +183,9 @@ class Fdl:
     cliente: tuple[str | None, str | None] = (None, None)  # (nome, erid)
     fazenda: tuple[str | None, str | None] = (None, None)
     talhao: tuple[str | None, str | None] = (None, None)
-    cultura: str | None = None
+    cultura: str | None = None  # da cultura usada na operação (ProductRef -> variedade -> cultura)
+    variedade: str | None = None
+    ano_safra: int | None = None
     operador: str | None = None
     tarefa: str | None = None
     implemento: str | None = None
@@ -196,12 +203,24 @@ def ler_fdl(xml: bytes) -> Fdl:
         raise RcdFormatError(f"arquivo .fdl inválido: {exc}") from exc
     fdl = Fdl(inicios=[], colunas={})
     larguras: dict[str, float] = {}
+    pais = {filho: pai for pai in raiz.iter() for filho in pai}
+    produtos = [
+        e.get("eridRef") for e in raiz.iter() if _local(e.tag) == "ProductRef" and e.get("eridRef")
+    ]
+    for e in raiz.iter():
+        if _local(e.tag) == "CropVariety" and e.get("erid") in produtos:
+            pai = pais.get(e)
+            fdl.variedade = e.get("name")
+            fdl.cultura = pai.get("name") if pai is not None else None
+            break
     for el in raiz.iter():
         nome = _local(el.tag)
         at = el.attrib
         if nome == "LogTaskRegion" and at.get("timeStamp"):
             ts = datetime.fromisoformat(at["timeStamp"].replace("Z", "+00:00"))
             fdl.inicios.append(ts.astimezone(UTC))
+            if at.get("cropYear", "").isdigit() and fdl.ano_safra is None:
+                fdl.ano_safra = int(at["cropYear"])
         elif "columnID" in at:
             rep = at.get("variableRepresentation") or at.get("definedTypeRepresentation")
             if rep:
@@ -216,8 +235,6 @@ def ler_fdl(xml: bytes) -> Fdl:
             fdl.fazenda = (at.get("name"), at.get("erid"))
         elif nome == "Field" and fdl.talhao[0] is None:
             fdl.talhao = (at.get("name"), at.get("erid"))
-        elif nome == "CropVariety" and fdl.cultura is None:
-            fdl.cultura = at.get("name")
         elif nome == "Operator" and fdl.operador is None:
             fdl.operador = at.get("name")
         elif nome == "Task" and fdl.tarefa is None:

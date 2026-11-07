@@ -28,14 +28,15 @@ def _registro(
     return reg + b"".join(struct.pack("<2Hd", 3, 8, v) for v in crus)
 
 
-def test_registro_de_evento_zera_as_medidas_omitidas() -> None:
-    fdd = gs3._cabecalho()
+def test_depois_do_evento_o_delta_parte_do_valor_fisico_zero() -> None:
+    fdd = gs3._cabecalho()  # base da umidade: 15 %
     fdd += _registro(0, 0b11, [250, 4000], 0, 0, [22.0, 8.0])  # 17,5 % e 4 kg
     fdd += _registro(0b11, 0, [], 0, 200, [])  # evento: sem umidade e massa
-    fdd += _registro(0, 0, [260, 3900], 0, 1000, [])  # recomeça do zero
+    fdd += _registro(0, 0, [1760, 3900], 0, 1000, [])  # 17,6 % e 3,9 kg, a partir de zero
     [bloco] = ler_fdd(fdd)
     umidade = [r[0] for r in bloco.linhas]
-    assert umidade == pytest.approx([17.5, 15.0, 17.6])
+    assert umidade[0] == pytest.approx(17.5) and umidade[1] is None
+    assert umidade[2] == pytest.approx(17.6)  # e não 15 + 17,6
     assert bloco.linhas[2][1] == pytest.approx(3.9)
 
 

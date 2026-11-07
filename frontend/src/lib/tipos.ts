@@ -220,3 +220,58 @@ export interface MaquinaVisao {
   rs_ha: number | null;
   t_ha: number | null;
 }
+
+export interface SafraResumo {
+  safra: string;
+  cultura: string | null;
+  area_colhida_ha: number;
+  sacas: number;
+  sc_ha: number | null;
+  inicio: string;
+  fim: string;
+}
+
+export interface OperacaoMaquina {
+  operacao: string;
+  motor_h: number | null;
+  litros: number | null;
+  custo_rs: number | null;
+  maquinas: number;
+}
+
+export interface TalhaoFechamento {
+  talhao_id: string | null;
+  talhao_nome: string | null;
+  cultura: string | null;
+  variedades: string[];
+  area_talhao_ha: number | null;
+  area_colhida_ha: number;
+  sacas: number;
+  sc_ha: number | null;
+  vs_media_pct: number | null;
+  umidade_pct: number | null;
+  colheita_inicio: string;
+  colheita_fim: string;
+  janela_inicio: string;
+  motor_h: number;
+  litros: number;
+  custo_diesel_rs: number | null;
+  l_ha: number | null;
+  custo_diesel_ha: number | null;
+  custo_diesel_saca: number | null;
+  operacoes_maquina: OperacaoMaquina[];
+}
+
+export interface Fechamento {
+  safra: string;
+  cultura: string | null;
+  area_colhida_ha: number;
+  sacas: number;
+  sc_ha: number | null;
+  motor_h: number;
+  litros: number;
+  custo_diesel_rs: number | null;
+  custo_diesel_saca: number | null;
+  horas_ha: number | null;
+  talhoes: TalhaoFechamento[];
+}

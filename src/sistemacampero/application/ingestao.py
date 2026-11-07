@@ -35,6 +35,7 @@ from sistemacampero.domain.ingestao import (
     TipoJob,
     caminho_bruto,
     caminho_limpo,
+    empacotar_isoxml,
     empacotar_rcd,
     nome_para_exibicao,
     tipo_do_arquivo,
@@ -46,6 +47,8 @@ from sistemacampero.domain.telemetry import EmptyFile, ParseContext
 
 logger = logging.getLogger(__name__)
 _LINHAS_OMNI = {"cabeceira": "_headland", "linha_guia": "_runline"}
+# O .zip vem marcado como Gen4 (trator); o que está dentro diz a tecnologia de verdade.
+_TECNOLOGIA = {TipoArquivo.RCD: "gs3", TipoArquivo.ISOXML: "isoxml"}
 
 _CONTENT_TYPE = {
     TipoArquivo.JDL: "application/octet-stream",
@@ -54,6 +57,7 @@ _CONTENT_TYPE = {
     TipoArquivo.GJSON: "application/geo+json",
     TipoArquivo.CONTORNO: "application/octet-stream",
     TipoArquivo.RCD: "application/octet-stream",
+    TipoArquivo.ISOXML: "application/octet-stream",
 }
 _ASSINATURA = {TipoArquivo.JDL: b"\x0d", TipoArquivo.ZIP: b"PK\x03\x04"}
 
@@ -292,7 +296,17 @@ class ExecutorDeJobs:
             return {"status": "arquivo_inexistente"}
         self._repo.marcar_arquivo(org, zip_id, StatusArquivo.PROCESSANDO, None)
         lote_id = arquivo.get("lote_id") or job.lote_id
-        contagem = {"jdl": 0, "masterdata": 0, "gjson": 0, "contorno": 0, "rcd": 0, "duplicados": 0}
+        contagem = {
+            "jdl": 0,
+            "masterdata": 0,
+            "gjson": 0,
+            "contorno": 0,
+            "rcd": 0,
+            "isoxml": 0,
+            "duplicados": 0,
+        }
+        # ISOBUS: pasta -> {"taskdata.xml": bytes, "tlg00001.xml": bytes, "tlg00001.bin": ...}
+        pastas_isoxml: dict[str, dict[str, bytes]] = {}
         metades_rcd: dict[str, dict[str, bytes]] = {}  # GS3: caminho sem extensão -> .fdl/.fdd
         masterdata: list[UUID] = []
         # nome no zip -> arquivo (novo ou já existente): o .gjson repetido de outro pendrive
@@ -317,6 +331,10 @@ class ExecutorDeJobs:
                     ):
                         projecoes[pasta] = entrada.conteudo.decode("latin-1")[:2000]
                         continue
+                    if entrada.tipo is TipoArquivo.ISOXML:
+                        nome = posixpath.basename(entrada.caminho_no_zip.replace("\\", "/"))
+                        pastas_isoxml.setdefault(pasta, {})[nome.lower()] = entrada.conteudo
+                        continue
                     if entrada.tipo is TipoArquivo.RCD:
                         par = self._par_rcd(metades_rcd, entrada)
                         if par is None:
@@ -337,6 +355,10 @@ class ExecutorDeJobs:
                     org, zip_id, StatusArquivo.REJEITADO, f"{exc.codigo}: {exc.mensagem}"
                 )
                 return {"status": StatusArquivo.REJEITADO.value, "motivo": exc.codigo, **contagem}
+        for entrada in self._pacotes_isoxml(pastas_isoxml):
+            reg = self._registrar_entrada(org, zip_id, lote_id, arquivo, entrada)
+            contagem["isoxml"] += 1
+            contagem["duplicados"] += int(reg.duplicado)
         # Cadastro do monitor antes dos .jdl (prioridade menor = antes na fila).
         for md_id in masterdata:  # um por zip (chave = zip): pendrive novo reimporta
             self._repo.enfileirar(
@@ -501,6 +523,32 @@ class ExecutorDeJobs:
         }
 
     @staticmethod
+    def _pacotes_isoxml(pastas: dict[str, dict[str, bytes]]) -> list[zip_seguro.EntradaZip]:
+        """Cada TLG (cabeçalho + binário) com o TASKDATA.XML da mesma pasta vira um arquivo."""
+        saida = []
+        for pasta, arquivos in sorted(pastas.items()):
+            taskdata = arquivos.get("taskdata.xml")
+            if taskdata is None:
+                continue
+            for nome in sorted(arquivos):
+                if not nome.endswith(".xml") or nome == "taskdata.xml":
+                    continue
+                base = nome[:-4]
+                binario = arquivos.get(f"{base}.bin")
+                if binario is None:
+                    continue
+                tlg = base.upper()
+                saida.append(
+                    zip_seguro.EntradaZip(
+                        f"{tlg}.isoxml",
+                        f"{pasta}/{tlg}.isoxml",
+                        TipoArquivo.ISOXML,
+                        empacotar_isoxml(tlg, taskdata, arquivos[nome], binario),
+                    )
+                )
+        return saida
+
+    @staticmethod
     def _par_rcd(
         metades: dict[str, dict[str, bytes]], entrada: zip_seguro.EntradaZip
     ) -> zip_seguro.EntradaZip | None:
@@ -533,7 +581,7 @@ class ExecutorDeJobs:
                 BUCKET_BRUTOS, caminho, io.BytesIO(entrada.conteudo), _CONTENT_TYPE[entrada.tipo]
             )
         # MasterData/SpatialFiles ficam guardados para o importador Gen4 (M4).
-        processa = entrada.tipo in (TipoArquivo.JDL, TipoArquivo.RCD)
+        processa = entrada.tipo in (TipoArquivo.JDL, TipoArquivo.RCD, TipoArquivo.ISOXML)
         job = TipoJob.PROCESSAR_ARQUIVO if processa else None
         return self._repo.registrar_arquivo(
             NovoArquivo(
@@ -543,11 +591,8 @@ class ExecutorDeJobs:
                 tipo=entrada.tipo,
                 tamanho_bytes=len(entrada.conteudo),
                 caminho_storage=caminho,
-                marca=arquivo_zip.get("marca"),
-                # O .zip vem marcado como Gen4 (trator); o par .fdl/.fdd é do GreenStar 3.
-                tecnologia=(
-                    "gs3" if entrada.tipo is TipoArquivo.RCD else arquivo_zip.get("tecnologia")
-                ),
+                marca="isobus" if entrada.tipo is TipoArquivo.ISOXML else arquivo_zip.get("marca"),
+                tecnologia=_TECNOLOGIA.get(entrada.tipo, arquivo_zip.get("tecnologia")),
                 lote_id=lote_id,
                 arquivo_pai_id=zip_id,
             ),

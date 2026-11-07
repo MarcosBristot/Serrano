@@ -23,6 +23,7 @@ import shapely
 from psycopg.types.json import Jsonb
 
 from sistemacampero.application.processamento import ResultadoSessao
+from sistemacampero.domain.colheita import massa_seca_kg, safra_de
 from sistemacampero.domain.ingestao import StatusArquivo
 from sistemacampero.infrastructure.persistence.cadastro import TALHOES_ATIVOS, achar_talhao
 from sistemacampero.infrastructure.persistence.db import Conexao, Database
@@ -168,6 +169,7 @@ class PostgresRepositorioResultados:
                 r,
             )
             self._telemetria(conn, organizacao_id, maquina_id, sessao_id, r)
+            self._colheita(conn, organizacao_id, sessao_id, r)
             self._cobertura(conn, organizacao_id, sessao_id, versao_regras, r)
             execucao_id = self._execucao(
                 conn, organizacao_id, sessao_id, versao_regras, config_regras
@@ -260,6 +262,30 @@ class PostgresRepositorioResultados:
             valores,
         ).fetchone()
         return _uuid(linha)
+
+    @staticmethod
+    def _colheita(conn: Conexao, org: UUID, sessao_id: UUID, r: ResultadoSessao) -> None:
+        """Resumo da colheita (massa seca e área com a plataforma baixa), refeito a cada versão."""
+        c = r.sessao.colheita
+        conn.execute("delete from public.colheitas where sessao_id = %s", (sessao_id,))
+        if c is None or c.massa_umida_kg <= 0:
+            return
+        conn.execute(
+            "insert into public.colheitas (sessao_id, organizacao_id, cultura, variedade, safra,"
+            " massa_umida_kg, umidade_pct, massa_seca_kg, area_colhida_ha)"
+            " values (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (
+                sessao_id,
+                org,
+                c.cultura,
+                c.variedade,
+                safra_de(c.cultura, r.sessao.metadados.inicio),
+                c.massa_umida_kg,
+                c.umidade_pct,
+                massa_seca_kg(c),
+                c.area_colhida_ha,
+            ),
+        )
 
     def _talhao_monitor(
         self, conn: Conexao, org: UUID, meta: Any, fazenda_id: UUID | None

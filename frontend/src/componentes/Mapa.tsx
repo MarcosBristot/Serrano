@@ -9,6 +9,7 @@ export interface Camadas {
   calor?: FC; // hexágonos com properties.l_ha
   trilha?: FC; // linhas com properties.tipo (trabalho|parado) + pontos de parada
   linhas?: FC; // cabeceiras e linhas-guia do talhão (properties.tipo: cabeceira|linha_guia)
+  produtividade?: FC; // talhões pintados: properties.cor e properties.rotulo ("62 sc/ha")
 }
 
 const ESTILO: maplibregl.StyleSpecification = {
@@ -55,7 +56,8 @@ export function Mapa({ camadas, className = "h-[520px]", enquadrar = true }: { c
     (m.getSource("calor") as maplibregl.GeoJSONSource).setData(c.calor ?? VAZIO);
     (m.getSource("trilha") as maplibregl.GeoJSONSource).setData(c.trilha ?? VAZIO);
     (m.getSource("linhas") as maplibregl.GeoJSONSource).setData(c.linhas ?? VAZIO);
-    const b = enquadrar ? limites([c.trilha, c.calor, c.talhoes]) : null;
+    (m.getSource("produtividade") as maplibregl.GeoJSONSource).setData(c.produtividade ?? VAZIO);
+    const b = enquadrar ? limites([c.trilha, c.calor, c.produtividade ?? c.talhoes]) : null;
     if (b) m.fitBounds(b, { padding: 48, maxZoom: 16, duration: 600 });
   };
 
@@ -74,6 +76,7 @@ export function Mapa({ camadas, className = "h-[520px]", enquadrar = true }: { c
       m.addSource("calor", { type: "geojson", data: VAZIO });
       m.addSource("trilha", { type: "geojson", data: VAZIO });
       m.addSource("linhas", { type: "geojson", data: VAZIO });
+      m.addSource("produtividade", { type: "geojson", data: VAZIO });
       m.addLayer({
         id: "calor", type: "fill", source: "calor",
         paint: {
@@ -81,6 +84,8 @@ export function Mapa({ camadas, className = "h-[520px]", enquadrar = true }: { c
           "fill-opacity": 0.72,
         },
       });
+      m.addLayer({ id: "produtividade", type: "fill", source: "produtividade", paint: { "fill-color": ["get", "cor"], "fill-opacity": 0.62 } });
+      m.addLayer({ id: "produtividade-borda", type: "line", source: "produtividade", paint: { "line-color": "#ffffff", "line-width": 1.5, "line-opacity": 0.7 } });
       m.addLayer({ id: "talhoes-fundo", type: "fill", source: "talhoes", paint: { "fill-color": "#f9eecb", "fill-opacity": 0.08 } });
       m.addLayer({ id: "talhoes-borda", type: "line", source: "talhoes", paint: { "line-color": "#f9eecb", "line-width": 2.5 } });
       m.addLayer({
@@ -128,6 +133,11 @@ export function Mapa({ camadas, className = "h-[520px]", enquadrar = true }: { c
         const quando = p.gravado_em ? new Date(String(p.gravado_em)).toLocaleDateString("pt-BR") : null;
         new maplibregl.Popup().setLngLat(e.lngLat).setHTML(`<b>${rotulo}</b><br/>${p.talhao}${quando ? ` · gravada em ${quando}` : ""}`).addTo(m);
       });
+      m.addLayer({
+        id: "produtividade-rotulo", type: "symbol", source: "produtividade",
+        layout: { "text-field": ["get", "rotulo"], "text-size": 13, "text-font": ["Open Sans Semibold"] },
+        paint: { "text-color": "#fff", "text-halo-color": "#0c1f11", "text-halo-width": 1.8 },
+      });
       pronto.current = true;
       aplicar();
     });
@@ -139,7 +149,7 @@ export function Mapa({ camadas, className = "h-[520px]", enquadrar = true }: { c
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(aplicar, [camadas.talhoes, camadas.calor, camadas.trilha, camadas.linhas]);
+  useEffect(aplicar, [camadas.talhoes, camadas.calor, camadas.trilha, camadas.linhas, camadas.produtividade]);
 
   return <div ref={div} className={`overflow-hidden rounded-2xl ${className}`} />;
 }

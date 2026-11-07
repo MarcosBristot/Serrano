@@ -17,6 +17,25 @@ interface Item {
 
 const MB = 1024 * 1024;
 
+const MONITORES = [
+  { nome: "John Deere Gen4", marcas: "pasta JD-Data e Gen4", traz: "horas, diesel, trajeto, talhões" },
+  { nome: "John Deere GreenStar 3", marcas: "pasta GS3_2630 (colheitadeira)", traz: "colheita: sacas, umidade, produtividade" },
+  { nome: "ISOBUS (ISOXML)", marcas: "Stara, Jacto, Case, New Holland, Massey, Kuhn…", traz: "horas, diesel, trajeto, taxa aplicada" },
+  { nome: "Controlador OMNI", marcas: "pasta OMNI/Data (pulverizador)", traz: "contornos, cabeceiras e linhas-guia" },
+];
+
+// Resultado da expansão do .zip: o que foi encontrado, por tipo de monitor.
+function resumoZip(r: Record<string, unknown>): string {
+  const n = (k: string) => Number(r[k] ?? 0);
+  const partes = [
+    n("jdl") && `${n("jdl")} do trator (Gen4)`,
+    n("rcd") && `${n("rcd")} da colheitadeira`,
+    n("isoxml") && `${n("isoxml")} ISOBUS`,
+    n("contorno") && `${n("contorno")} arquivos de talhão`,
+  ].filter(Boolean);
+  return partes.length ? `Encontrado: ${partes.join(", ")}. Processando em seguida.` : "Nenhum arquivo de monitor reconhecido no .zip.";
+}
+
 export default function Enviar() {
   const [itens, setItens] = useState<Item[]>([]);
   const [arrastando, setArrastando] = useState(false);
@@ -38,7 +57,7 @@ export default function Enviar() {
           st === "vazio" ? "Arquivo sem dados do trator (normal: o monitor grava muitos arquivos vazios)."
           : st === "rejeitado" ? `Arquivo rejeitado: ${String(r.motivo ?? "")}`
           : st === "bloqueado_plano" ? "Máquina acima do limite do plano."
-          : "jdl" in r ? `${r.jdl} arquivos .jdl no zip, processando em seguida.`
+          : "jdl" in r ? resumoZip(r)
           : `Processado · qualidade ${String(r.qualidade ?? "—")} · ${String(r.alertas ?? 0)} alerta(s).`;
         atualizar(chave, { estado: st === "rejeitado" ? "erro" : "pronto", mensagem: msg, progresso: 1 });
         qc.invalidateQueries();
@@ -71,7 +90,7 @@ export default function Enviar() {
 
   return (
     <>
-      <Cabecalho titulo="Enviar pendrive" sub="Arraste os arquivos .jdl da pasta JD-Data/log, ou o .zip do pendrive inteiro (com a pasta Gen4 vêm os talhões)." />
+      <Cabecalho titulo="Enviar pendrive" sub="Compacte o pendrive inteiro em .zip e arraste aqui: a Serrano reconhece sozinha o monitor de cada máquina, de qualquer marca compatível." />
       <div
         onDragOver={(e) => { e.preventDefault(); setArrastando(true); }}
         onDragLeave={() => setArrastando(false)}
@@ -81,15 +100,28 @@ export default function Enviar() {
       >
         <div className="grid h-16 w-16 place-items-center rounded-2xl bg-broto-500 text-noite-950 shadow-[0_0_30px_rgba(140,198,63,.4)]"><UploadCloud size={30} /></div>
         <h3 className="mt-4 text-lg font-bold">Solte os arquivos aqui</h3>
-        <p className="mt-1 text-sm text-folha-900/60">ou clique para escolher · .jdl e .zip · o processamento continua mesmo se você sair da página</p>
+        <p className="mt-1 text-sm text-folha-900/60">ou clique para escolher · .zip do pendrive (ou .jdl soltos) · o processamento continua mesmo se você sair da página</p>
         <input ref={entrada} type="file" multiple accept=".jdl,.zip" className="hidden" onChange={(e) => e.target.files && void enviar(e.target.files)} />
       </div>
 
+      <section className="mt-6 cartao p-5" aria-labelledby="t-monitores">
+        <h2 id="t-monitores" className="mb-3 font-bold">Monitores que a Serrano lê</h2>
+        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {MONITORES.map((m) => (
+            <li key={m.nome} className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <div className="font-semibold">{m.nome}</div>
+              <div className="text-xs text-folha-900/60">{m.marcas}</div>
+              <div className="mt-1 text-xs text-broto-300">{m.traz}</div>
+            </li>
+          ))}
+        </ul>
+      </section>
+
       {itens.length > 0 && (
-        <div className="mt-6 cartao divide-y divide-folha-900/5">
+        <div className="mt-6 cartao divide-y divide-white/5">
           {itens.map((i) => (
             <div key={i.chave} className="flex items-center gap-4 p-4">
-              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-folha-50 text-folha-700"><FileArchive size={20} /></div>
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-broto-500/15 text-broto-300"><FileArchive size={20} /></div>
               <div className="min-w-0 flex-1">
                 <div className="flex justify-between gap-2 text-sm">
                   <span className="truncate font-semibold">{i.nome}</span>
@@ -98,7 +130,7 @@ export default function Enviar() {
                 {i.estado === "enviando" ? (
                   <div className="mt-2 h-2 rounded-full bg-folha-50"><div className="h-2 rounded-full bg-folha-600 transition-all" style={{ width: `${Math.round(i.progresso * 100)}%` }} /></div>
                 ) : (
-                  <p className={`mt-1 text-xs ${i.estado === "erro" ? "text-rose-700" : "text-folha-900/60"}`}>{i.mensagem}</p>
+                  <p className={`mt-1 text-xs ${i.estado === "erro" ? "text-rose-300" : "text-folha-900/60"}`}>{i.mensagem}</p>
                 )}
               </div>
               <div className="shrink-0">

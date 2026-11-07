@@ -19,6 +19,7 @@ from typing import BinaryIO
 import numpy as np
 import pandas as pd
 
+from sistemacampero.domain.colheita import Colheita, cultura_normalizada
 from sistemacampero.domain.ingestao import desempacotar_rcd, eh_pacote_rcd
 from sistemacampero.domain.telemetry import (
     ArquivoInvalido,
@@ -116,7 +117,7 @@ class JohnDeereGs3Adapter:
         bruta = pd.concat(partes, ignore_index=True).sort_values("ts", kind="stable")
         diag = Diagnostico(fonte_posicao="trilha_gps")
         amostras = self._por_segundo(bruta, diag)
-        self._colheita(bruta, diag)
+        colheita = self._colheita(bruta, fdl, diag)
         meta = MetadadosSessao(
             fabricante="John Deere",
             serial_maquina=fdl.serial_maquina,
@@ -133,7 +134,7 @@ class JohnDeereGs3Adapter:
             implemento_largura_m=fdl.largura_m,
             operacao="colheita",
         )
-        return ParsedSession(sha, ADAPTER, VERSAO, meta, amostras, diag)
+        return ParsedSession(sha, ADAPTER, VERSAO, meta, amostras, diag, colheita)
 
     @staticmethod
     def _por_segundo(bruta: pd.DataFrame, diag: Diagnostico) -> pd.DataFrame:
@@ -166,15 +167,37 @@ class JohnDeereGs3Adapter:
         return no_schema_universal(df)
 
     @staticmethod
-    def _colheita(bruta: pd.DataFrame, diag: Diagnostico) -> None:
+    def _colheita(bruta: pd.DataFrame, fdl: Fdl, diag: Diagnostico) -> Colheita | None:
+        """Massa, umidade e área colhida (só com a plataforma abaixada e a máquina andando)."""
         if "massa_kg" not in bruta:
-            return
+            return None
         massa = bruta["massa_kg"].clip(lower=0).fillna(0)
         total = float(massa.sum())
-        diag.contadores["massa_umida_kg"] = round(total)
+        umidade = None
         if "umidade_pct" in bruta and total > 0:
-            umidade = float((bruta["umidade_pct"].fillna(0) * massa).sum() / total)
-            diag.canais["colheita"] = {
-                "massa_umida_kg": round(total, 1),
-                "umidade_media_pct": round(umidade, 2),
-            }
+            valida = bruta["umidade_pct"].between(5, 45)  # fora disso é sensor vazio/saturado
+            peso = massa.where(valida, 0)
+            if peso.sum() > 0:
+                umidade = float((bruta["umidade_pct"].where(valida, 0) * peso).sum() / peso.sum())
+        area = 0.0
+        if fdl.largura_m and "speed_kmh" in bruta:
+            dt = (bruta["t_ms"].diff().fillna(0) / 1000).clip(0, 5)
+            baixa = bruta["plataforma"].eq(0) if "plataforma" in bruta else True
+            colhendo = baixa & (bruta["speed_kmh"] > 0.5)
+            metros = (bruta["speed_kmh"] / 3.6 * dt).where(colhendo, 0).sum()
+            area = float(metros * fdl.largura_m / 10_000)
+        diag.contadores["massa_umida_kg"] = round(total)
+        diag.canais["colheita"] = {
+            "massa_umida_kg": round(total, 1),
+            "umidade_media_pct": round(umidade, 2) if umidade is not None else None,
+            "area_colhida_ha": round(area, 3),
+            "cultura": fdl.cultura,
+        }
+        return Colheita(
+            cultura=cultura_normalizada(fdl.cultura),
+            variedade=fdl.variedade,
+            massa_umida_kg=total,
+            umidade_pct=umidade,
+            area_colhida_ha=area,
+            ano_safra=fdl.ano_safra,
+        )

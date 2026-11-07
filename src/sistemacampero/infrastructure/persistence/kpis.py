@@ -496,12 +496,12 @@ class PostgresConsultasKpi:
                     where j.versao_regras = %s and {filtro}
                     group by 1
                 ), colheita as (
-                    select s.maquina_id,
-                        sum((s.qualidade -> 'diagnostico' -> 'contadores'
-                             ->> 'massa_umida_kg')::float) as massa_kg
-                    from public.sessoes_trabalho s
+                    -- massa seca (umidade de comercialização), a que o produtor vende
+                    select s.maquina_id, sum(c.massa_seca_kg) as massa_kg
+                    from public.colheitas c
+                    join public.sessoes_trabalho s on s.id = c.sessao_id
                     join public.organizacoes o on o.id = s.organizacao_id
-                    where s.operacao = 'colheita'
+                    where true
                       and (%s::date is null or (s.inicio at time zone o.fuso)::date >= %s)
                       and (%s::date is null or (s.inicio at time zone o.fuso)::date <= %s)
                     group by 1

@@ -22,7 +22,7 @@ from sistemacampero.domain.telemetry import (
     ParsedSession,
 )
 from sistemacampero.infrastructure.parsers.registry import registro_padrao
-from tests.sinteticos import gs3
+from tests.sinteticos import gs3, isoxml
 from tests.sinteticos.jdl_builder import Cenario, construir
 
 
@@ -53,6 +53,13 @@ AMOSTRAS: dict[tuple[str, str], Amostras] = {
         lambda: gs3.construir(gs3.CenarioGs3(minutos=30)),
         lambda: gs3.construir(gs3.CenarioGs3(minutos=5)),
         lambda: gs3.construir(gs3.CenarioGs3(so_cabecalho=True)),
+    ),
+    # ISOBUS não tem RPM padronizado no TLG; a amostra é gravada a 5 Hz, como muitos monitores.
+    ("isobus", "isoxml"): Amostras(
+        "TLG00001.isoxml",
+        lambda: isoxml.construir(isoxml.CenarioIso(minutos=30, hz=5)),
+        lambda: isoxml.construir(isoxml.CenarioIso(minutos=5)),
+        lambda: isoxml.construir(isoxml.CenarioIso(so_cabecalho=True)),
     ),
 }
 
