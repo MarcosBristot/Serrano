@@ -44,6 +44,7 @@ class ConsultasKpi(Protocol):
         curtas: bool,
     ) -> list[dict[str, Any]]: ...
     def arquivos_da_jornada(self, org: UUID, jornada_id: UUID) -> list[dict[str, Any]]: ...
+    def visao_maquinas(self, org: UUID, f: dict[str, Any], versao: str) -> list[dict[str, Any]]: ...
     def pontos_jornada(self, org: UUID, jornada_id: UUID) -> pd.DataFrame | None: ...
 
 
@@ -159,6 +160,23 @@ class ServicoKpis:
             _com_indicadores(j)
             for j in self._q.jornadas(org, filtros, self._versao, limite, cursor, curtas)
         ]
+
+    def maquinas(self, org: UUID, filtros: dict[str, Any]) -> list[dict[str, Any]]:
+        """Máquinas com uso real no período, já com os indicadores e a produção colhida."""
+        saida = []
+        for m in self._q.visao_maquinas(org, filtros, self._versao):
+            area, massa, motor = m["area_ha"], m["massa_kg"], m["motor_h"]
+            saida.append(
+                {
+                    **m,
+                    "l_ha": m["litros"] / area if area > 0.05 else None,
+                    "ha_h": area / m["trabalho_h"] if m["trabalho_h"] and area > 0.05 else None,
+                    "ociosidade_pct": 100 * m["ocioso_h"] / motor if motor else None,
+                    "rs_ha": m["custo_rs"] / area if m["custo_rs"] and area > 0.05 else None,
+                    "t_ha": massa / 1000 / area if massa and area > 0.05 else None,
+                }
+            )
+        return saida
 
     def jornada(self, org: UUID, jornada_id: UUID) -> dict[str, Any]:
         linhas = self._q.jornadas(org, {"id": jornada_id}, self._versao, 1, None, True)

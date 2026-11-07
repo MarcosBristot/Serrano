@@ -406,9 +406,9 @@ class ExecutorDeJobs:
         controle.verificar()
         resumo = self._cadastro.importar_contornos(org, itens)
         resumo["linhas"] = self._cadastro.importar_linhas(org, linhas) if linhas else 0
-        relocalizadas = 0
+        relocalizadas = self._servico_cadastro.agrupar_talhoes(org)["sessoes_relocalizadas"]
         if resumo["contornos_novos"] or resumo["talhoes_criados"]:
-            relocalizadas = self._servico_cadastro.relocalizar(
+            relocalizadas += self._servico_cadastro.relocalizar(
                 org, self._cadastro.arquivos_para_relocalizar(org)
             )
         for ident in lidos:
@@ -478,10 +478,10 @@ class ExecutorDeJobs:
             )
             return {"status": StatusArquivo.REJEITADO.value, "motivo": exc.codigo}
         resumo = self._cadastro.importar(org, cadastro)
-        relocalizadas = 0
+        relocalizadas = self._servico_cadastro.agrupar_talhoes(org)["sessoes_relocalizadas"]
         if resumo.contornos_novos:
             # Sessões já gravadas sem esses contornos; as pendentes já vão localizar.
-            relocalizadas = self._servico_cadastro.relocalizar(
+            relocalizadas += self._servico_cadastro.relocalizar(
                 org, self._cadastro.arquivos_para_relocalizar(org)
             )
         self._repo.marcar_arquivo(

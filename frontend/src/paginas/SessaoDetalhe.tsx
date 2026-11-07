@@ -54,7 +54,7 @@ export default function SessaoDetalhe() {
           )}
           <div className="flex flex-wrap gap-4 px-3 py-2 text-xs text-folha-900/60">
             <span className="flex items-center gap-1.5"><i className="inline-block h-1 w-5 rounded bg-trigo-400" /> trabalhando</span>
-            <span className="flex items-center gap-1.5"><i className="inline-block h-0.5 w-5 rounded bg-white ring-1 ring-folha-900/30" /> parado/deslocando</span>
+            <span className="flex items-center gap-1.5"><i className="inline-block h-0.5 w-5 rounded bg-white/80" /> parado/deslocando</span>
             <span className="flex items-center gap-1.5"><i className="inline-block h-3 w-3 rounded-full bg-rose-700" /> parada longa</span>
           </div>
         </div>

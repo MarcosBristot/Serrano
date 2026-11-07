@@ -173,6 +173,10 @@ class RepositorioCadastro(Protocol):
 
     def linhas_geojson(self, org: UUID, talhao_id: UUID | None = None) -> dict[str, Any]: ...
 
+    def agrupar_talhoes(self, org: UUID) -> tuple[dict[str, int], list[UUID]]:
+        """Junta talhões que são a mesma lavoura; devolve o resumo e os arquivos a refazer."""
+        ...
+
     def arquivos_para_relocalizar(
         self, org: UUID, contorno: MultiPolygon | None = None, talhao_id: UUID | None = None
     ) -> list[UUID]: ...

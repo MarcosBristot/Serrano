@@ -8,7 +8,7 @@ import { Cabecalho, Erro } from "../componentes/ui";
 import { usePeriodo } from "../contextos/Sessao";
 import { api } from "../lib/api";
 import { useContornos, useLinhasTalhao } from "../lib/consultas";
-import { num } from "../lib/formato";
+import { data, isoDia, num } from "../lib/formato";
 import type { Resumo } from "../lib/tipos";
 
 export default function MapaPagina() {
@@ -26,8 +26,12 @@ export default function MapaPagina() {
     queryKey: ["resumo", { inicio: periodo.inicio, fim: periodo.fim }],
     queryFn: () => api<Resumo>("/kpis/resumo", { params: { inicio: periodo.inicio, fim: periodo.fim } }),
   });
-  const inicio = periodo.inicio ?? resumo.data?.primeiro_dia ?? undefined;
+  // O mapa de calor vai até 1 ano: em períodos maiores, usa o último ano com operação.
   const fim = periodo.fim ?? resumo.data?.ultimo_dia ?? undefined;
+  const pedido = periodo.inicio ?? resumo.data?.primeiro_dia ?? undefined;
+  const umAnoAntes = fim ? isoDia(new Date(new Date(`${fim}T12:00:00`).getTime() - 365 * 86_400_000)) : undefined;
+  const inicio = pedido && umAnoAntes && pedido < umAnoAntes ? umAnoAntes : pedido;
+  const cortado = Boolean(pedido && inicio !== pedido);
   const calor = useQuery({
     queryKey: ["calor", inicio, fim, tamanho],
     queryFn: () => api<FC & { properties: Record<string, number | null> }>("/mapas/calor", { params: { inicio, fim, tamanho_m: tamanho } }),
@@ -82,6 +86,7 @@ export default function MapaPagina() {
                 ))}
               </dl>
             )}
+            {cortado && <p className="mt-3 text-xs text-trigo-300">Mostrando o último ano com operação ({data(inicio)} a {data(fim)}).</p>}
             {calor.isLoading && verCalor && <p className="mt-3 text-xs text-folha-900/50">Calculando mapa de calor…</p>}
             {calor.error && <div className="mt-3"><Erro erro={calor.error} /></div>}
             <p className="mt-4 text-xs text-folha-900/50">

@@ -24,6 +24,7 @@ from psycopg.types.json import Jsonb
 
 from sistemacampero.application.processamento import ResultadoSessao
 from sistemacampero.domain.ingestao import StatusArquivo
+from sistemacampero.infrastructure.persistence.cadastro import TALHOES_ATIVOS, achar_talhao
 from sistemacampero.infrastructure.persistence.db import Conexao, Database
 from sistemacampero.infrastructure.persistence.kpis import recalcular_diarias, recalcular_jornadas
 
@@ -151,13 +152,7 @@ class PostgresRepositorioResultados:
                 meta.fazenda_guid,
                 {"nome": meta.fazenda_nome, "cliente_nome": meta.cliente_nome},
             )
-            talhao_monitor_id = self._upsert_guid(
-                conn,
-                "talhoes",
-                organizacao_id,
-                meta.talhao_guid,
-                {"nome": meta.talhao_nome, "fazenda_id": fazenda_id},
-            )
+            talhao_monitor_id = self._talhao_monitor(conn, organizacao_id, meta, fazenda_id)
             implemento_id = self._implemento(conn, organizacao_id, r)
             # GPS (ou manual, que o SQL preserva) > talhão escolhido no monitor.
             talhao_id = r.talhao_id or talhao_monitor_id
@@ -241,9 +236,10 @@ class PostgresRepositorioResultados:
         conn.execute(
             "update public.maquinas set"
             " primeira_atividade = least(coalesce(primeira_atividade, %s), %s),"
-            " ultima_atividade = greatest(coalesce(ultima_atividade, %s), %s)"
+            " ultima_atividade = greatest(coalesce(ultima_atividade, %s), %s),"
+            " modelo = coalesce(modelo, %s)"
             " where id = %s",
-            (meta.inicio, meta.inicio, meta.fim, meta.fim, maquina_id),
+            (meta.inicio, meta.inicio, meta.fim, meta.fim, meta.modelo, maquina_id),
         )
         return maquina_id, None
 
@@ -264,6 +260,43 @@ class PostgresRepositorioResultados:
             valores,
         ).fetchone()
         return _uuid(linha)
+
+    def _talhao_monitor(
+        self, conn: Conexao, org: UUID, meta: Any, fazenda_id: UUID | None
+    ) -> UUID | None:
+        """O talhão escolhido no monitor, já resolvido para a lavoura que ele é.
+
+        Guid conhecido: o talhão dele (ou o principal, se foi agrupado). Guid novo com nome de
+        uma lavoura que já existe ("CoxilhaGrand_Trigo22" = "Coxilha Grande"): guarda o guid
+        num registro agrupado e devolve o existente. Só cria talhão novo quando não há nenhum.
+        """
+        if not meta.talhao_guid or not meta.talhao_nome:
+            return None
+        conhecido = conn.execute(
+            "select coalesce(agrupado_em, id) as id from public.talhoes"
+            " where organizacao_id = %s and external_guid = %s",
+            (org, meta.talhao_guid),
+        ).fetchone()
+        if conhecido is not None:
+            return _uuid(conhecido)
+        achado = achar_talhao(conn.execute(TALHOES_ATIVOS, (org,)).fetchall(), meta.talhao_nome)
+        if achado is None:
+            return self._upsert_guid(
+                conn,
+                "talhoes",
+                org,
+                meta.talhao_guid,
+                {"nome": meta.talhao_nome, "fazenda_id": fazenda_id},
+            )
+        conn.execute(
+            "insert into public.talhoes"
+            " (organizacao_id, external_guid, nome, fazenda_id, ativo, agrupado_em)"
+            " values (%s, %s, %s, %s, false, %s)"
+            " on conflict (organizacao_id, external_guid) do nothing",
+            (org, meta.talhao_guid, meta.talhao_nome, fazenda_id, achado["id"]),
+        )
+        principal: UUID = achado["id"]
+        return principal
 
     def _implemento(self, conn: Conexao, org: UUID, r: ResultadoSessao) -> UUID | None:
         """O do cadastro do monitor (mesmo nome) se existir; senão cria um pelo .jdl."""

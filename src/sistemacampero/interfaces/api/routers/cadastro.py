@@ -188,6 +188,13 @@ def listar_talhoes(
     return repo.listar(ctx.organizacao_id, "talhoes", {"fazenda_id": fazenda_id, "ativo": ativo})
 
 
+@router.post("/talhoes/agrupar")
+def agrupar_talhoes(c: ContainerDep, ctx: OperarDep) -> dict[str, int]:
+    """Junta os talhões que são a mesma lavoura escrita de outro jeito ("Mae_Aveia22" = "Mãe")."""
+    assert c.servico_cadastro is not None
+    return c.servico_cadastro.agrupar_talhoes(ctx.organizacao_id)
+
+
 @router.get("/talhoes/linhas")
 def linhas_dos_talhoes(repo: RepoDep, ctx: LerDep, talhao_id: UUID | None = None) -> dict[str, Any]:
     """GeoJSON de cabeceiras e linhas-guia (ex.: do OMNI do pulverizador) para o mapa."""

@@ -88,13 +88,14 @@ export function Mapa({ camadas, className = "h-[520px]", enquadrar = true }: { c
         layout: { "text-field": ["get", "nome"], "text-size": 13, "text-font": ["Open Sans Semibold"] },
         paint: { "text-color": "#fff", "text-halo-color": "#1c3b1f", "text-halo-width": 1.6 },
       });
+      // O tracejado não aceita expressão por feição: uma camada por tipo de linha.
       m.addLayer({
-        id: "linhas", type: "line", source: "linhas",
-        paint: {
-          "line-color": ["match", ["get", "tipo"], "cabeceira", "#7dd3fc", "#c4b5fd"],
-          "line-width": ["match", ["get", "tipo"], "cabeceira", 2, 1.6],
-          "line-dasharray": ["match", ["get", "tipo"], "cabeceira", ["literal", [1]], ["literal", [3, 2]]],
-        },
+        id: "linhas", type: "line", source: "linhas", filter: ["==", ["get", "tipo"], "cabeceira"],
+        paint: { "line-color": "#7dd3fc", "line-width": 2 },
+      });
+      m.addLayer({
+        id: "linhas-guia", type: "line", source: "linhas", filter: ["==", ["get", "tipo"], "linha_guia"],
+        paint: { "line-color": "#c4b5fd", "line-width": 1.6, "line-dasharray": [3, 2] },
       });
       m.addLayer({
         id: "trilha", type: "line", source: "trilha", filter: ["==", ["geometry-type"], "LineString"],
@@ -120,7 +121,7 @@ export function Mapa({ camadas, className = "h-[520px]", enquadrar = true }: { c
         const p = e.features?.[0]?.properties;
         if (p) new maplibregl.Popup().setLngLat(e.lngLat).setHTML(`<b>Parada de ${p.minutos} min</b><br/>${p.motor_ligado ? "motor ligado" : "motor desligado"}`).addTo(m);
       });
-      m.on("click", "linhas", (e) => {
+      m.on("click", ["linhas", "linhas-guia"], (e) => {
         const p = e.features?.[0]?.properties;
         if (!p) return;
         const rotulo = p.tipo === "cabeceira" ? "Cabeceira" : Number(p.subtipo) === 1 ? "Linha-guia reta (AB)" : "Linha-guia curva";

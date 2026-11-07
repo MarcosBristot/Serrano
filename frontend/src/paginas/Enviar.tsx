@@ -79,7 +79,7 @@ export default function Enviar() {
         onClick={() => entrada.current?.click()}
         className={`cartao flex cursor-pointer flex-col items-center border-2 border-dashed px-6 py-14 text-center transition ${arrastando ? "border-folha-500 bg-folha-50" : "border-folha-900/15 hover:border-folha-400"}`}
       >
-        <div className="grid h-16 w-16 place-items-center rounded-2xl bg-folha-700 text-white shadow-lg"><UploadCloud size={30} /></div>
+        <div className="grid h-16 w-16 place-items-center rounded-2xl bg-broto-500 text-noite-950 shadow-[0_0_30px_rgba(140,198,63,.4)]"><UploadCloud size={30} /></div>
         <h3 className="mt-4 text-lg font-bold">Solte os arquivos aqui</h3>
         <p className="mt-1 text-sm text-folha-900/60">ou clique para escolher · .jdl e .zip · o processamento continua mesmo se você sair da página</p>
         <input ref={entrada} type="file" multiple accept=".jdl,.zip" className="hidden" onChange={(e) => e.target.files && void enviar(e.target.files)} />

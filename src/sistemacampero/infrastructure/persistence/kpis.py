@@ -454,6 +454,93 @@ class PostgresConsultasKpi:
                 (*params, limite),
             ).fetchall()
 
+    def visao_maquinas(self, org: UUID, f: dict[str, Any], versao: str) -> list[dict[str, Any]]:
+        """Uma linha por máquina com uso real: tipo pelo que ela faz e somas das jornadas.
+
+        Registros de segundos (liga/desliga) não entram; máquina sem nenhuma hora de motor
+        na vida (ex.: o serial do monitor quando o arquivo não traz o da máquina) não aparece.
+        """
+        periodo = ["not (" + _CURTA + ")"]
+        params: list[Any] = []
+        if f.get("inicio"):
+            periodo.append("(j.inicio at time zone o.fuso)::date >= %s")
+            params.append(f["inicio"])
+        if f.get("fim"):
+            periodo.append("(j.inicio at time zone o.fuso)::date <= %s")
+            params.append(f["fim"])
+        filtro = " and ".join(periodo)
+        with self._db.transacao(org) as conn:
+            return conn.execute(
+                f"""
+                with vida as (
+                    select j.maquina_id, sum(j.motor_h) as motor_h,
+                        bool_or(j.operacao = 'colheita') as colhe,
+                        bool_or(j.operacao like 'pulveriz%%') as pulveriza
+                    from public.jornadas j where j.versao_regras = %s group by 1
+                ), periodo as (
+                    select j.maquina_id, count(*) as jornadas, sum(j.motor_h) as motor_h,
+                        sum(j.trabalho_h) as trabalho_h, sum(j.ocioso_h) as ocioso_h,
+                        sum(j.litros) as litros, sum(j.litros_ocioso) as litros_ocioso,
+                        sum(j.area_ha) as area_ha, sum(j.distancia_km) as distancia_km,
+                        sum(j.litros * p.preco_rs_l)::float as custo_rs,
+                        sum(j.litros_ocioso * p.preco_rs_l)::float as custo_ocioso_rs,
+                        count(distinct j.talhao_id) as talhoes
+                    from public.jornadas j
+                    join public.organizacoes o on o.id = j.organizacao_id
+                    left join lateral (select pc.preco_rs_l from public.preco_combustivel pc
+                        where pc.tipo = 'S10'
+                          and pc.valido_de <= (j.inicio at time zone o.fuso)::date
+                          and (pc.valido_ate is null
+                               or pc.valido_ate > (j.inicio at time zone o.fuso)::date)
+                        order by pc.valido_de desc limit 1) p on true
+                    where j.versao_regras = %s and {filtro}
+                    group by 1
+                ), colheita as (
+                    select s.maquina_id,
+                        sum((s.qualidade -> 'diagnostico' -> 'contadores'
+                             ->> 'massa_umida_kg')::float) as massa_kg
+                    from public.sessoes_trabalho s
+                    join public.organizacoes o on o.id = s.organizacao_id
+                    where s.operacao = 'colheita'
+                      and (%s::date is null or (s.inicio at time zone o.fuso)::date >= %s)
+                      and (%s::date is null or (s.inicio at time zone o.fuso)::date <= %s)
+                    group by 1
+                )
+                select m.id, m.serial, m.apelido, m.modelo, m.fabricante,
+                    case when v.colhe then 'colheitadeira' when v.pulveriza then 'pulverizador'
+                         else 'trator' end as tipo,
+                    m.ultima_atividade, coalesce(p.jornadas, 0) as jornadas,
+                    coalesce(p.motor_h, 0) as motor_h, coalesce(p.trabalho_h, 0) as trabalho_h,
+                    coalesce(p.ocioso_h, 0) as ocioso_h, coalesce(p.litros, 0) as litros,
+                    coalesce(p.litros_ocioso, 0) as litros_ocioso,
+                    coalesce(p.area_ha, 0) as area_ha,
+                    coalesce(p.distancia_km, 0) as distancia_km, p.custo_rs, p.custo_ocioso_rs,
+                    coalesce(p.talhoes, 0) as talhoes, c.massa_kg, u.talhao_nome as ultimo_talhao
+                from public.maquinas m
+                join vida v on v.maquina_id = m.id and v.motor_h >= 0.1
+                left join periodo p on p.maquina_id = m.id
+                left join colheita c on c.maquina_id = m.id
+                left join lateral (select t.nome as talhao_nome from public.jornadas j
+                    left join public.talhoes t on t.id = j.talhao_id
+                    where j.maquina_id = m.id and j.versao_regras = %s
+                      and not ({_CURTA}) order by j.inicio desc limit 1) u on true
+                where m.ativa and (%s::uuid is null or m.id = %s)
+                order by coalesce(p.motor_h, 0) desc, m.ultima_atividade desc nulls last
+                """,
+                (
+                    versao,
+                    versao,
+                    *params,
+                    f.get("inicio"),
+                    f.get("inicio"),
+                    f.get("fim"),
+                    f.get("fim"),
+                    versao,
+                    f.get("maquina_id"),
+                    f.get("maquina_id"),
+                ),
+            ).fetchall()
+
     def arquivos_da_jornada(self, org: UUID, jornada_id: UUID) -> list[dict[str, Any]]:
         with self._db.transacao(org) as conn:
             return conn.execute(

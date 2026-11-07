@@ -12,6 +12,8 @@ import Inicio from "./paginas/Inicio";
 import JornadaDetalhe from "./paginas/JornadaDetalhe";
 import Jornadas from "./paginas/Jornadas";
 import Login from "./paginas/Login";
+import MaquinaDetalhe from "./paginas/MaquinaDetalhe";
+import Maquinas from "./paginas/Maquinas";
 import MapaPagina from "./paginas/MapaPagina";
 import Painel from "./paginas/Painel";
 import SessaoDetalhe from "./paginas/SessaoDetalhe";
@@ -31,6 +33,8 @@ export default function App() {
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<Inicio />} />
+        <Route path="maquinas" element={<Maquinas />} />
+        <Route path="maquinas/:id" element={<MaquinaDetalhe />} />
         <Route path="analise" element={<Painel />} />
         <Route path="jornadas" element={<Jornadas />} />
         <Route path="jornadas/:id" element={<JornadaDetalhe />} />

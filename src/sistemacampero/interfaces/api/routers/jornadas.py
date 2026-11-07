@@ -16,6 +16,7 @@ from sistemacampero.domain.tenancy import ContextoOrganizacao, Permissao
 from sistemacampero.interfaces.api.deps import ContainerDep, exigir
 
 router = APIRouter(prefix="/jornadas", tags=["jornadas"])
+maquinas = APIRouter(prefix="/maquinas", tags=["jornadas"])
 LerDep = Annotated[ContextoOrganizacao, Depends(exigir(Permissao.LER))]
 
 
@@ -68,6 +69,34 @@ class JornadaDetalheOut(JornadaOut):
     arquivos_detalhe: list[ArquivoDaJornada]
 
 
+class MaquinaVisaoOut(BaseModel):
+    id: UUID
+    serial: str
+    apelido: str | None
+    modelo: str | None
+    fabricante: str | None
+    tipo: str  # trator | colheitadeira | pulverizador (pelo que a máquina faz)
+    ultima_atividade: datetime | None
+    ultimo_talhao: str | None
+    jornadas: int
+    motor_h: float
+    trabalho_h: float
+    ocioso_h: float
+    litros: float
+    litros_ocioso: float
+    area_ha: float
+    distancia_km: float
+    talhoes: int
+    custo_rs: float | None
+    custo_ocioso_rs: float | None
+    massa_kg: float | None
+    l_ha: float | None
+    ha_h: float | None
+    ociosidade_pct: float | None
+    rs_ha: float | None
+    t_ha: float | None
+
+
 class PaginaJornadas(BaseModel):
     itens: list[JornadaOut]
     next_cursor: str | None
@@ -105,6 +134,20 @@ def listar(
         ).decode()
         linhas = linhas[:limit]
     return PaginaJornadas(itens=[JornadaOut.model_validate(x) for x in linhas], next_cursor=proximo)
+
+
+@maquinas.get("/visao", response_model=list[MaquinaVisaoOut])
+def visao_maquinas(
+    servico: ServicoDep,
+    ctx: LerDep,
+    inicio: date | None = None,
+    fim: date | None = None,
+    maquina_id: UUID | None = None,
+) -> list[dict[str, Any]]:
+    """Por máquina, só o que tem uso real: tipo, horas, diesel, área, custo e colheita."""
+    return servico.maquinas(
+        ctx.organizacao_id, {"inicio": inicio, "fim": fim, "maquina_id": maquina_id}
+    )
 
 
 @router.get("/{jornada_id}", response_model=JornadaDetalheOut)

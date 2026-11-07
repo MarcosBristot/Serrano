@@ -191,3 +191,32 @@ export interface JornadaDetalhe extends Jornada {
     litros_integral: number | null;
   }[];
 }
+
+/** GET /maquinas/visao: máquina com uso real e somas do período. */
+export interface MaquinaVisao {
+  id: string;
+  serial: string;
+  apelido: string | null;
+  modelo: string | null;
+  fabricante: string | null;
+  tipo: "trator" | "colheitadeira" | "pulverizador";
+  ultima_atividade: string | null;
+  ultimo_talhao: string | null;
+  jornadas: number;
+  motor_h: number;
+  trabalho_h: number;
+  ocioso_h: number;
+  litros: number;
+  litros_ocioso: number;
+  area_ha: number;
+  distancia_km: number;
+  talhoes: number;
+  custo_rs: number | null;
+  custo_ocioso_rs: number | null;
+  massa_kg: number | null;
+  l_ha: number | null;
+  ha_h: number | null;
+  ociosidade_pct: number | null;
+  rs_ha: number | null;
+  t_ha: number | null;
+}

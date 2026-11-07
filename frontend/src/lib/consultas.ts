@@ -6,7 +6,8 @@ import { api } from "./api";
 import type { Talhao } from "./tipos";
 
 export function useTalhoes() {
-  return useQuery({ queryKey: ["talhoes"], queryFn: () => api<Talhao[]>("/talhoes") });
+  // Só os ativos: repetidos agrupados ("Mae_Aveia22" = "Mãe") ficam guardados, mas fora da tela.
+  return useQuery({ queryKey: ["talhoes"], queryFn: () => api<Talhao[]>("/talhoes", { params: { ativo: true } }) });
 }
 
 /** Contornos de todos os talhões como FeatureCollection (para o mapa). */

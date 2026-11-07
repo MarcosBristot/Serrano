@@ -33,6 +33,10 @@ class ServicoCadastro:
             )
         return len(dict.fromkeys(arquivos))
 
+    def agrupar_talhoes(self, org: UUID) -> dict[str, int]:
+        resumo, arquivos = self._repo.agrupar_talhoes(org)
+        return {**resumo, "sessoes_relocalizadas": self.relocalizar(org, arquivos)}
+
     def definir_contorno(
         self,
         org: UUID,

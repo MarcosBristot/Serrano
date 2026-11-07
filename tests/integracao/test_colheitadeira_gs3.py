@@ -53,3 +53,64 @@ def test_fdd_avulso_e_recusado_com_orientacao(client: TestClient, org: dict[str,
         headers=org["auth"],
     )
     assert r.status_code == 422 and "GS3_2630" in r.json()["detail"]
+
+
+def test_visao_por_maquina_separa_trator_e_colheitadeira(
+    client: TestClient, worker: Worker, org: dict[str, Any]
+) -> None:
+    from tests.sinteticos.jdl_builder import Cenario
+    from tests.sinteticos.jdl_builder import construir as construir_jdl
+
+    h = org["auth"]
+    pacote = {
+        f"{PASTA}/6363bd9a.fdl": gs3.construir_fdl(),
+        f"{PASTA}/6363bd9a.fdd": gs3.construir_fdd(gs3.CenarioGs3(minutos=30, massa_kg_s=4.0)),
+    }
+    upload(client, org, zipar(pacote), nome="colheitadeira.zip")
+    upload(client, org, construir_jdl(Cenario(minutos=20)), nome="trator.jdl")
+    drenar(worker)
+
+    visao = {m["tipo"]: m for m in client.get("/api/v1/maquinas/visao", headers=h).json()}
+    assert set(visao) == {"trator", "colheitadeira"}
+    colhe = visao["colheitadeira"]
+    assert colhe["modelo"] == "S540"
+    assert colhe["massa_kg"] == pytest.approx(4.0 * 30 * 60, rel=0.01)
+    assert colhe["motor_h"] == pytest.approx(0.5, abs=0.02)
+    assert colhe["t_ha"] and colhe["t_ha"] > 0
+    assert visao["trator"]["massa_kg"] is None
+
+
+def test_talhao_com_safra_no_nome_cai_na_lavoura_que_ja_existe(
+    client: TestClient, worker: Worker, org: dict[str, Any], admin: Conn
+) -> None:
+    h = org["auth"]
+    existente = client.post("/api/v1/talhoes", json={"nome": "Talhão Teste"}, headers=h).json()
+    pacote = {
+        f"{PASTA}/6363bd9a.fdl": gs3.construir_fdl().replace(
+            b"Talhao Teste", b"TalhaoTeste_Soja22"
+        ),
+        f"{PASTA}/6363bd9a.fdd": gs3.construir_fdd(gs3.CenarioGs3(minutos=5)),
+    }
+    upload(client, org, zipar(pacote), nome="colheitadeira.zip")
+    drenar(worker)
+
+    ativos = client.get("/api/v1/talhoes", params={"ativo": True}, headers=h).json()
+    assert [t["nome"] for t in ativos] == ["Talhão Teste"]
+    sessao = admin.execute(
+        "select talhao_monitor_id from public.sessoes_trabalho where organizacao_id = %s",
+        (org["id"],),
+    ).fetchone()
+    assert sessao is not None and str(sessao["talhao_monitor_id"]) == existente["id"]
+
+
+def test_agrupar_junta_os_repetidos_sem_apagar(client: TestClient, org: dict[str, Any]) -> None:
+    h = org["auth"]
+    for nome in ("Mãe", "Mae_Aveia22", "Mae", "Bira", "Coxilha Grande", "CoxilhaGrand_Trigo22"):
+        assert client.post("/api/v1/talhoes", json={"nome": nome}, headers=h).status_code == 201
+    r = client.post("/api/v1/talhoes/agrupar", headers=h).json()
+    assert (r["grupos"], r["talhoes_agrupados"], r["talhoes_ativos"]) == (2, 3, 3)
+    ativos = sorted(
+        t["nome"] for t in client.get("/api/v1/talhoes", params={"ativo": True}, headers=h).json()
+    )
+    assert ativos == ["Bira", "Coxilha Grande", "Mãe"]
+    assert len(client.get("/api/v1/talhoes", headers=h).json()) == 6  # nada apagado
