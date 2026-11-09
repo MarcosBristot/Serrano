@@ -192,6 +192,7 @@ def main() -> int:
                 else []
             ),
             *([_a_cada(3600, titular.executar_vencidas)] if titular else []),
+            *([_a_cada(900, resumo.enviar_da_semana)] if (resumo := c.resumo_semanal) else []),
         ],
     )
     parar = threading.Event()

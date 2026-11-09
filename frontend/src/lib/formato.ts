@@ -49,7 +49,9 @@ const ROTULO_TIPO: Record<string, string> = {
 export function nomeMaquina(m: { apelido?: string | null; modelo?: string | null; tipo?: string; serial: string }): string {
   if (m.apelido) return m.apelido;
   const tipo = ROTULO_TIPO[m.tipo ?? ""] ?? "Máquina";
-  return m.modelo ? `${tipo} ${m.modelo}` : `${tipo} …${m.serial.slice(-6)}`;
+  // PIN John Deere de trator: 1 + fábrica (2) + modelo ("1BM6210M..." = 6210M)
+  const modelo = m.modelo ?? /^1[A-Z]{2}(\d{4}[A-Z])/.exec(m.serial)?.[1];
+  return modelo ? `${tipo} ${modelo}` : `${tipo} …${m.serial.slice(-6)}`;
 }
 
 /** Talhão criado pelo controlador sem nome ("Campo_151122-145941") vira algo legível. */

@@ -1,17 +1,30 @@
 /** Resumo do produtor: o que aconteceu e o que fazer agora, em linguagem direta. */
 import { useQuery } from "@tanstack/react-query";
 import {
-  ArrowRight, CheckCircle2, Clock, Coins, Fuel, LandPlot, Receipt, TriangleAlert, Upload, Wheat,
+  ArrowRight, CheckCircle2, Clock, Coins, Fuel, LandPlot, Receipt, TriangleAlert, Upload, Wheat, Wrench,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import { SeletorPeriodo } from "../componentes/Layout";
+import { ResumoSemanal } from "../componentes/ResumoSemanal";
 import { Carregando, Erro, IconeMaquina, Medidor, TIPO_MAQUINA, Vazio } from "../componentes/ui";
 import { usePeriodo, useSessao } from "../contextos/Sessao";
 import { api } from "../lib/api";
 import { ROTULO_TIPO_ALERTA, haQuanto, horas, nomeMaquina, nomeTalhao, num, pct, rs } from "../lib/formato";
 import type { Alerta, ItemRanking, Jornada, MaquinaVisao, Pagina, Resumo } from "../lib/tipos";
+
+interface Pendencia {
+  maquina_id: string;
+  serial: string;
+  apelido: string | null;
+  modelo: string | null;
+  horimetro_h: number | null;
+  nome: string;
+  faltam_h: number | null;
+  situacao: "proxima" | "vencida";
+  dias_trabalho: number | null;
+}
 
 function saudacao(): string {
   const h = new Date().getHours();
@@ -44,6 +57,10 @@ export default function Inicio() {
     queryKey: ["jornadas", "ultimas", f],
     queryFn: () => api<Pagina<Jornada>>("/jornadas", { params: { ...f, limit: 40 } }),
   });
+  const pendencias = useQuery({
+    queryKey: ["pendencias"],
+    queryFn: () => api<Pendencia[]>("/manutencao/pendencias"),
+  });
   const alertas = useQuery({
     queryKey: ["alertas", "abertos"],
     queryFn: () => api<Pagina<Alerta>>("/alerts", { params: { status: "aberto", limit: 50 } }),
@@ -59,6 +76,20 @@ export default function Inicio() {
 
   // O que fazer agora: cada aviso diz o tamanho do problema e leva para onde resolver.
   const acoes: Acao[] = [];
+  for (const p of pendencias.data ?? []) {
+    const m = frota.find((x) => x.id === p.maquina_id);
+    const nome = m ? nomeMaquina(m) : nomeMaquina({ ...p, tipo: undefined });
+    acoes.push({
+      tom: p.situacao === "vencida" ? "alto" : "atencao",
+      icone: Wrench,
+      titulo: `${nome}: ${p.nome.toLowerCase()}${p.situacao === "vencida" ? " vencida" : ""}`,
+      texto: p.situacao === "vencida"
+        ? `Passou ${num(-(p.faltam_h ?? 0), 0)} h do prazo (horímetro em ${num(p.horimetro_h, 0)} h). Máquina parada na safra custa mais que a revisão.`
+        : `Faltam ${num(p.faltam_h, 0)} h${p.dias_trabalho != null ? `, cerca de ${num(Math.max(1, p.dias_trabalho), 0)} dias de trabalho` : ""}. Bom momento para agendar.`,
+      link: `/maquinas/${p.maquina_id}`,
+      botao: "Ver manutenção",
+    });
+  }
   for (const m of ativas) {
     if ((m.ociosidade_pct ?? 0) >= 20 && m.motor_h >= 2) {
       acoes.push({
@@ -150,7 +181,7 @@ export default function Inicio() {
             <Numero icone={Clock} rotulo="Horas trabalhando" valor={horas(r.trabalho_h)} detalhe={`+ ${horas(r.ocioso_h)} parado com motor ligado`} />
             <Numero icone={LandPlot} rotulo="Área trabalhada" valor={`${num(r.area_ha, 0)} ha`} detalhe={`${rs(r.rs_ha)} de diesel por hectare`} />
             {massaT > 0 ? (
-              <Numero icone={Wheat} rotulo="Colhido" valor={`${num(massaT, 0)} t`} detalhe="massa úmida na colheitadeira" tom="trigo" />
+              <Numero icone={Wheat} rotulo="Colhido" valor={`${num(massaT, 0)} t`} detalhe="massa seca, umidade de venda" tom="trigo" />
             ) : (
               <Numero icone={Coins} rotulo="Diesel por hectare" valor={`${num(r.l_ha, 1)} L`} detalhe="média de todas as operações" />
             )}
@@ -179,6 +210,8 @@ export default function Inicio() {
               </div>
             </section>
           </div>
+
+          <ResumoSemanal ultimoDia={r.ultimo_dia} />
 
           <section aria-labelledby="t-maquinas">
             <div className="mb-3 flex items-baseline justify-between">

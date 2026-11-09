@@ -7,6 +7,7 @@ import {
 } from "recharts";
 
 import { SeletorPeriodo } from "../componentes/Layout";
+import { AbaManutencao } from "../componentes/Manutencao";
 import { Mapa, type FC } from "../componentes/Mapa";
 import { Carregando, Erro, IconeMaquina, Kpi, Medidor, Selo, TIPO_MAQUINA, Vazio } from "../componentes/ui";
 import { usePeriodo } from "../contextos/Sessao";
@@ -15,7 +16,7 @@ import { useContornos } from "../lib/consultas";
 import { haQuanto, horas, nomeMaquina, nomeTalhao, num, pct, rs } from "../lib/formato";
 import type { ItemRanking, Jornada, MaquinaVisao, Pagina } from "../lib/tipos";
 
-type Aba = "geral" | "operacoes" | "talhoes";
+type Aba = "geral" | "operacoes" | "talhoes" | "manutencao";
 const EIXO = { fontSize: 11, fill: "rgba(226,238,220,.6)" };
 const mes = (iso: string) => new Date(`${iso.slice(0, 10)}T12:00:00`).toLocaleDateString("pt-BR", { month: "short", year: "2-digit" });
 
@@ -71,12 +72,14 @@ export default function MaquinaDetalhe() {
       </section>
 
       <div className="mb-6 flex gap-1 rounded-xl border border-white/10 bg-white/5 p-1 sm:inline-flex" role="tablist">
-        {([["geral", "Visão geral"], ["operacoes", `Operações (${m.jornadas})`], ["talhoes", `Talhões (${m.talhoes})`]] as const).map(([v, r]) => (
+        {([["geral", "Visão geral"], ["operacoes", `Operações (${m.jornadas})`], ["talhoes", `Talhões (${m.talhoes})`], ["manutencao", "Manutenção"]] as const).map(([v, r]) => (
           <button key={v} role="tab" aria-selected={aba === v} onClick={() => setAba(v)} className={`aba flex-1 ${aba === v ? "aba-ativa" : ""}`}>{r}</button>
         ))}
       </div>
 
-      {m.motor_h === 0 ? (
+      {aba === "manutencao" ? (
+        <AbaManutencao maquinaId={m.id} tipo={m.tipo} />
+      ) : m.motor_h === 0 ? (
         <Vazio titulo="Sem trabalho neste período" texto="Troque o período para ver o histórico desta máquina." />
       ) : aba === "geral" ? (
         <div className="space-y-6">

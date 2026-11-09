@@ -11,7 +11,9 @@ from sistemacampero.application.exportacao import ServicoExportacao
 from sistemacampero.application.fechamento import ServicoFechamento
 from sistemacampero.application.ingestao import ExecutorDeJobs, ServicoIngestao
 from sistemacampero.application.kpis import ServicoKpis
+from sistemacampero.application.manutencao import ServicoManutencao
 from sistemacampero.application.processamento import ProcessadorDeArquivo
+from sistemacampero.application.resumo_semanal import ServicoResumoSemanal
 from sistemacampero.application.tenancy import ServicoTenancy
 from sistemacampero.application.titular import ServicoTitular
 from sistemacampero.domain.ingestao import TipoJob
@@ -34,10 +36,12 @@ from sistemacampero.infrastructure.persistence.ingestao import (
     PostgresRepositorioIngestao,
 )
 from sistemacampero.infrastructure.persistence.kpis import PostgresConsultasKpi, somas
+from sistemacampero.infrastructure.persistence.manutencao import PostgresManutencao
 from sistemacampero.infrastructure.persistence.organizacoes import (
     PostgresRepositorioOrganizacoes,
 )
 from sistemacampero.infrastructure.persistence.resultados import PostgresRepositorioResultados
+from sistemacampero.infrastructure.persistence.resumo_semanal import PostgresResumoSemanal
 from sistemacampero.infrastructure.persistence.titular import PostgresTitular, RegistrosDeAcesso
 from sistemacampero.infrastructure.security.jwt import (
     CacheJwks,
@@ -93,6 +97,8 @@ class Container:
     exportacao: ServicoExportacao | None = None
     db: Database | None = None
     fechamento: ServicoFechamento | None = None
+    manutencao: ServicoManutencao | None = None
+    resumo_semanal: ServicoResumoSemanal | None = None
 
     def fechar(self) -> None:
         if self.db is not None:
@@ -167,6 +173,8 @@ def construir(settings: Settings, storage: Armazenamento | None = None) -> Conta
     )
     exportacao = ServicoExportacao(repo_exportacao, repo_ingestao, storage, regras.versao)
     executor.registrar(TipoJob.EXPORTAR, exportacao.executar)
+    kpis = ServicoKpis(consultas, somas, regras.versao)
+    manutencao = ServicoManutencao(PostgresManutencao(db))
     return Container(
         settings=settings,
         tenancy=ServicoTenancy(PostgresRepositorioOrganizacoes(db)),
@@ -179,7 +187,7 @@ def construir(settings: Settings, storage: Armazenamento | None = None) -> Conta
         cadastro=cadastro,
         servico_cadastro=ServicoCadastro(cadastro, repo_ingestao),
         consultas_kpi=consultas,
-        kpis=ServicoKpis(consultas, somas, regras.versao),
+        kpis=kpis,
         repo_alertas=repo_alertas,
         alertas=servico_alertas,
         notificacoes=ServicoNotificacoes(repo_alertas, notificador),
@@ -195,4 +203,12 @@ def construir(settings: Settings, storage: Armazenamento | None = None) -> Conta
         equipe=ServicoEquipe(repo_equipe, notificador.convite if smtp else None),
         db=db,
         fechamento=ServicoFechamento(PostgresFechamento(db), regras.versao),
+        manutencao=manutencao,
+        resumo_semanal=ServicoResumoSemanal(
+            PostgresResumoSemanal(db),
+            kpis,
+            manutencao,
+            notificador,
+            str(settings.frontend_url) if settings.frontend_url else None,
+        ),
     )
