@@ -158,3 +158,16 @@ def test_fechamento_da_safra_por_talhao(
 
     nada = client.get("/api/v1/safras/fechamento", params={"safra": "1999/00"}, headers=h)
     assert nada.status_code == 404
+
+
+def test_reprocessar_inclui_a_colheitadeira(
+    client: TestClient, worker: Worker, org: dict[str, Any]
+) -> None:
+    pacote = {
+        f"{PASTA}/x.fdl": gs3.construir_fdl(),
+        f"{PASTA}/x.fdd": gs3.construir_fdd(gs3.CenarioGs3(minutos=5)),
+    }
+    upload(client, org, zipar(pacote), nome="colheitadeira.zip")
+    drenar(worker)
+    r = client.post("/api/v1/analysis/run", headers=org["auth"]).json()
+    assert r["sessoes_reenfileiradas"] == 1

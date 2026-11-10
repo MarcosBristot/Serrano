@@ -57,7 +57,7 @@ def test_csv_em_streaming_para_excel(client: TestClient, com_dados: dict[str, An
         headers=com_dados["auth"],
     )
     linhas = tel.content.decode().splitlines()
-    assert tel.status_code == 200 and len(linhas) > 150 and "segundos" in linhas[0]
+    assert tel.status_code == 200 and len(linhas) > 60 and "segundos" in linhas[0]
 
 
 def test_xlsx_assincrono_com_link(

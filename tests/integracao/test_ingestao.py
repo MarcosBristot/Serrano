@@ -53,7 +53,7 @@ def test_upload_processa_e_grava_tudo(
     assert (
         um(
             admin,
-            "select sum(peso_s) from public.telemetria where sessao_id = %s and geom is not null",
+            "select sum(peso_s) from public.telemetria where sessao_id = %s and lat is not null",
             sessao["id"],
         )
         == sessao["n_amostras"]

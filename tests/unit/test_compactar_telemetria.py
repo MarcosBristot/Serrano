@@ -28,7 +28,7 @@ def _limpo(n: int) -> pd.DataFrame:
 def test_janelas_preservam_totais() -> None:
     limpo = _limpo(3600)
     j = compactar(limpo, [None] * len(limpo))
-    assert len(j) < len(limpo) / 8  # ~10 s por linha
+    assert len(j) < len(limpo) / 16  # ~20 s trabalhando, ~60 s parado
     assert j["peso_s"].sum() == len(limpo)
 
     def totais(df: pd.DataFrame, peso: pd.Series) -> tuple[float, float, float, float]:
@@ -51,5 +51,14 @@ def test_janela_nao_mistura_talhoes() -> None:
     limpo = _limpo(20)
     talhoes = ["a"] * 5 + ["b"] * 15
     j = compactar(limpo, talhoes)
-    assert list(j["talhao_id"]) == ["a", "b", "b"]
-    assert list(j["peso_s"]) == [5, 5, 10]
+    assert list(j["talhao_id"]) == ["a", "b"]
+    assert list(j["peso_s"]) == [5, 15]
+
+
+def test_parado_vira_janelas_maiores_que_trabalhando() -> None:
+    limpo = _limpo(300)  # 240 s trabalhando e 60 s parado
+    j = compactar(limpo, [None] * len(limpo))
+    trabalhando = j[j["speed_kmh"] >= 1]
+    parado = j[j["speed_kmh"] < 1]
+    assert trabalhando["peso_s"].max() == 20
+    assert parado["peso_s"].max() == 60 and len(parado) == 1

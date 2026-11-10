@@ -379,7 +379,7 @@ class PostgresConsultasKpi:
     def pontos_mapa(self, org: UUID, f: dict[str, Any], celula_m: float) -> pd.DataFrame:
         """Pré-agrega no banco em células de ``celula_m`` (bem menores que o hexágono):
         254 mil pontos viram poucos milhares de linhas, com litros e área já somados."""
-        where, params = ["t.geom is not null", "t.engine_on", "t.speed_kmh >= 1"], []
+        where, params = ["t.lat is not null", "t.engine_on", "t.speed_kmh >= 1"], []
         for coluna, alias in (("maquina_id", "t"), ("talhao_id", "t"), ("operacao", "s")):
             if f.get(coluna) is not None:
                 where.append(f"{alias}.{coluna} = %s")
@@ -562,7 +562,7 @@ class PostgresConsultasKpi:
                 return None
             linhas = conn.execute(
                 "select ts, lat, lon, speed_kmh, engine_on, peso_s from public.telemetria"
-                " where maquina_id = %s and ts >= %s and ts <= %s and geom is not null"
+                " where maquina_id = %s and ts >= %s and ts <= %s and lat is not null"
                 " order by ts",
                 (j["maquina_id"], j["inicio"], j["fim"]),
             ).fetchall()
@@ -579,7 +579,7 @@ class PostgresConsultasKpi:
                 return None
             linhas = conn.execute(
                 "select ts, lat, lon, speed_kmh, engine_on, peso_s from public.telemetria"
-                " where sessao_id = %s and geom is not null order by ts",
+                " where sessao_id = %s and lat is not null order by ts",
                 (sessao_id,),
             ).fetchall()
         return pd.DataFrame(
@@ -598,7 +598,7 @@ class PostgresConsultasKpi:
         limite: int,
         apos: datetime | None,
     ) -> list[dict[str, Any]] | None:
-        where: list[str] = ["m.serial = %s", "t.geom is not null"]
+        where: list[str] = ["m.serial = %s", "t.lat is not null"]
         params: list[Any] = [serial]
         for cond, valor in (
             ("t.talhao_id = %s", talhao_id),

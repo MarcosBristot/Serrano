@@ -516,12 +516,18 @@ class PostgresRepositorioCadastro:
                     " where s.talhao_origem <> 'manual' and ms.cobertura_gps > 0"
                 ).fetchall()
             else:
+                # Caixa do contorno primeiro (barato, pelos índices da sessão); o ponto exato só
+                # para quem cai dentro dela.
+                x0, y0, x1, y1 = contorno.bounds
                 linhas = conn.execute(
                     "select s.arquivo_bruto_id from public.sessoes_trabalho s"
                     " where s.talhao_origem <> 'manual' and (s.talhao_id = %s or exists ("
                     "   select 1 from public.telemetria t where t.sessao_id = s.id"
-                    f"   and extensions.st_intersects(t.geom, ({_GEOM})::extensions.geography)))",
-                    (talhao_id, _wkb(contorno)),
+                    "   and t.lon between %s and %s and t.lat between %s and %s"
+                    "   and extensions.st_intersects("
+                    "     extensions.st_setsrid(extensions.st_makepoint(t.lon, t.lat), 4326),"
+                    f"     {_GEOM})))",
+                    (talhao_id, x0, x1, y0, y1, _wkb(contorno)),
                 ).fetchall()
         return [linha["arquivo_bruto_id"] for linha in linhas]
 

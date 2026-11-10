@@ -198,7 +198,7 @@ def test_trajeto_e_mapa_de_calor(
     linhas = [f for f in fc["features"] if f["geometry"]["type"] == "LineString"]
     assert linhas and all(f["properties"]["tipo"] == "trabalho" for f in linhas)
     assert sum(len(f["geometry"]["coordinates"]) for f in linhas) <= 200
-    assert fc["properties"]["pontos_originais"] > 150  # 30 min em janelas de 10 s
+    assert fc["properties"]["pontos_originais"] > 60  # 30 min em janelas de 20 s
 
     calor = _kpi(client, org, "mapas/calor", inicio=DIA, fim=DIA, tamanho_m=100)
     assert calor["features"]
@@ -260,14 +260,15 @@ def test_rotas_legadas_de_telemetria(
         )
         vistos += len(r.json())
         cursor = r.headers.get("x-next-cursor")
-    assert 55 <= vistos <= 65  # 10 min, um ponto por janela de 10 s
+    assert 28 <= vistos <= 35  # 10 min, um ponto por janela de 20 s
 
-    a_cada_10 = client.get(
+    # Espaçamento pedido maior que a janela gravada (20 s): um ponto por minuto.
+    a_cada_60 = client.get(
         "/api/v1/telemetry/machine/SINTETICO0001",
-        params={"passo_s": 10, "limit": 5000},
+        params={"passo_s": 60, "limit": 5000},
         headers=org["auth"],
     ).json()
-    assert 59 <= len(a_cada_10) <= 61
+    assert 9 <= len(a_cada_60) <= 11
     assert client.get("/api/v1/telemetry/machine/NAOEXISTE", headers=org["auth"]).status_code == 404
 
     stats = client.get("/api/v1/telemetry/stats/SINTETICO0001", headers=org["auth"]).json()

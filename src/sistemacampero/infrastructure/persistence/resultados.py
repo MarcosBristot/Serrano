@@ -45,7 +45,8 @@ COLUNAS_TELEMETRIA = (
     "engine_on",
 )
 
-JANELA_S = 10
+JANELA_S = 20  # trabalhando: ~28 m entre pontos a 5 km/h
+JANELA_PARADO_S = 60  # parado, desligado ou sem velocidade
 _MEDIAS = (
     "speed_kmh",
     "speed_alt_kmh",
@@ -57,8 +58,17 @@ _MEDIAS = (
 _ULTIMOS = ("fuel_total_l", "engine_hours")
 
 
-def compactar(limpo: pd.DataFrame, talhoes: list[Any], janela_s: int = JANELA_S) -> pd.DataFrame:
-    """1 Hz -> uma linha por janela de até ``janela_s`` com estado e talhão constantes.
+def compactar(
+    limpo: pd.DataFrame,
+    talhoes: list[Any],
+    janela_s: int = JANELA_S,
+    janela_parado_s: int = JANELA_PARADO_S,
+) -> pd.DataFrame:
+    """1 Hz -> uma linha por janela com estado e talhão constantes.
+
+    Trabalhando, janelas de até ``janela_s`` (o trajeto e o mapa de calor precisam do ponto a
+    cada poucos metros); parado, desligado ou sem velocidade, de até ``janela_parado_s`` (não
+    há o que desenhar). O segundo a segundo fica no Parquet do storage.
 
     O estado separa desligado / parado / trabalhando / sem velocidade, então os filtros das
     consultas (``engine_on``, ``speed_kmh >= 1``) continuam valendo linha a linha. Médias são
@@ -71,7 +81,12 @@ def compactar(limpo: pd.DataFrame, talhoes: list[Any], janela_s: int = JANELA_S)
     estado = np.select(
         [~ligado, vel.isna(), vel >= 1], [0, 3, 2], default=1
     )  # 0 desligado, 1 parado, 2 trabalhando, 3 sem velocidade
-    balde = df["ts"].dt.floor(f"{janela_s}s")  # não depende da unidade interna (ns ou us)
+    # floor por data (não depende da unidade interna, ns ou us); a janela depende do estado
+    balde = (
+        df["ts"]
+        .dt.floor(f"{janela_s}s")
+        .where(estado == 2, df["ts"].dt.floor(f"{janela_parado_s}s"))
+    )
     talhao = df["talhao_id"].fillna("-").astype(str)  # sem talhão é um valor, não "ausente"
     gps = df["gps_valid"].fillna(False).astype(bool)
     novo = (
