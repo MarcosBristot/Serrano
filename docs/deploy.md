@@ -1,5 +1,7 @@
 # Deploy (Supabase + Fly.io + Cloudflare Pages)
 
+> Sem orçamento para o piloto? [producao-em-casa.md](producao-em-casa.md): tudo numa máquina sua, custo zero.
+
 Tudo em **São Paulo**: banco e storage no Supabase `sa-east-1`, API e worker no Fly.io `gru`.
 Banco e worker longe um do outro foi o que deixou o processamento lento no piloto (worker no Brasil,
 banco no Canadá: ~10 arquivos/min com 6 workers; 875 arquivos levaram mais de 1 h). Na mesma região,

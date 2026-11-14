@@ -31,6 +31,8 @@ def principal(
     if credenciais is None or credenciais.scheme.lower() != "bearer":
         raise NaoAutenticado("Envie 'Authorization: Bearer <token>'.")
     usuario_id, email = c.verificador_token.verificar(credenciais.credentials)
+    if c.espelho_usuarios is not None:
+        c.espelho_usuarios.garantir(usuario_id, email)
     request.state.usuario_id = usuario_id  # registro de acesso (Marco Civil)
     return Principal(usuario_id=usuario_id, email=email)
 

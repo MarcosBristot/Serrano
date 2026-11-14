@@ -43,6 +43,7 @@ from sistemacampero.infrastructure.persistence.organizacoes import (
 from sistemacampero.infrastructure.persistence.resultados import PostgresRepositorioResultados
 from sistemacampero.infrastructure.persistence.resumo_semanal import PostgresResumoSemanal
 from sistemacampero.infrastructure.persistence.titular import PostgresTitular, RegistrosDeAcesso
+from sistemacampero.infrastructure.persistence.usuarios import EspelhoDeUsuarios
 from sistemacampero.infrastructure.security.jwt import (
     CacheJwks,
     VerificadorJwtSupabase,
@@ -99,6 +100,7 @@ class Container:
     fechamento: ServicoFechamento | None = None
     manutencao: ServicoManutencao | None = None
     resumo_semanal: ServicoResumoSemanal | None = None
+    espelho_usuarios: EspelhoDeUsuarios | None = None
 
     def fechar(self) -> None:
         if self.db is not None:
@@ -211,4 +213,5 @@ def construir(settings: Settings, storage: Armazenamento | None = None) -> Conta
             notificador,
             str(settings.frontend_url) if settings.frontend_url else None,
         ),
+        espelho_usuarios=EspelhoDeUsuarios(db) if settings.hospedagem == "casa" else None,
     )

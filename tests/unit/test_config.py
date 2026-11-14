@@ -47,6 +47,11 @@ def test_producao_exige_storage_do_supabase() -> None:
         _settings(supabase_url="https://abc.supabase.co", storage_backend="supabase")
 
 
+def test_producao_em_casa_aceita_disco_local() -> None:
+    s = _settings(supabase_url="https://abc.supabase.co", ambiente="prod", hospedagem="casa")
+    assert s.storage_backend == "local"
+
+
 def test_segredo_nao_aparece_no_repr() -> None:
     s = _settings(supabase_jwt_secret="super-secreto")
     assert "super-secreto" not in repr(s)
