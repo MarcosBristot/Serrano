@@ -32,7 +32,7 @@ export default function Alertas() {
       <div className="mb-5 flex gap-2">
         {ABAS.map((a) => (
           <button key={a.valor} onClick={() => setAba(a.valor)}
-            className={`rounded-xl px-4 py-2 text-sm font-semibold ${aba === a.valor ? "bg-folha-700 text-white" : "bg-white text-folha-900/70 shadow-cartao"}`}>
+            className={`rounded-xl px-4 py-2 text-sm font-semibold ${aba === a.valor ? "bg-broto-500 text-noite-950" : "bg-white/5 text-folha-900/70 ring-1 ring-white/10"}`}>
             {a.rotulo}
           </button>
         ))}

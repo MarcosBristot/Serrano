@@ -31,7 +31,7 @@ export default function Painel() {
 
   return (
     <>
-      <Cabecalho titulo="Painel da frota" sub="Horas, diesel e área de todas as máquinas no período." acoes={<SeletorPeriodo />} />
+      <Cabecalho titulo="Painel completo" sub="Horas, diesel, área, consumo e custo de todas as máquinas no período." acoes={<SeletorPeriodo />} />
 
       {r.sessoes === 0 ? (
         <Vazio
@@ -43,7 +43,7 @@ export default function Painel() {
         <>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <Kpi rotulo="Horas de motor" valor={horas(r.motor_h)} icone={Clock}
-              detalhe={<>{horas(r.trabalho_h)} trabalhando · {r.sessoes} operações · {r.maquinas} máq.</>} />
+              detalhe={<>{horas(r.trabalho_h)} trabalhando · {r.maquinas} máq.</>} />
             <Kpi rotulo="Diesel" valor={num(r.litros, 0)} unidade="L" icone={Fuel} tom="trigo"
               detalhe={<>{num(r.lph_trabalho, 1)} L/h em trabalho</>} />
             <Kpi rotulo="Área trabalhada" valor={num(r.area_ha, 1)} unidade="ha" icone={LandPlot}
@@ -68,18 +68,18 @@ export default function Painel() {
               <div className="h-72">
                 <ResponsiveContainer>
                   <ComposedChart data={serie.data ?? []} margin={{ left: -10, right: 0 }}>
-                    <CartesianGrid stroke="#0d201110" vertical={false} />
-                    <XAxis dataKey="periodo" tickFormatter={diaCurto} tick={{ fontSize: 11 }} />
-                    <YAxis yAxisId="h" tick={{ fontSize: 11 }} />
-                    <YAxis yAxisId="l" orientation="right" tick={{ fontSize: 11 }} />
+                    <CartesianGrid stroke="rgba(255,255,255,.07)" vertical={false} />
+                    <XAxis dataKey="periodo" tickFormatter={diaCurto} tick={{ fontSize: 11, fill: "rgba(226,238,220,.6)" }} stroke="rgba(255,255,255,.15)" />
+                    <YAxis yAxisId="h" tick={{ fontSize: 11, fill: "rgba(226,238,220,.6)" }} stroke="rgba(255,255,255,.15)" />
+                    <YAxis yAxisId="l" orientation="right" tick={{ fontSize: 11, fill: "rgba(226,238,220,.6)" }} stroke="rgba(255,255,255,.15)" />
                     <Tooltip
                       labelFormatter={(v) => diaCurto(String(v))}
                       formatter={(v: number, n) => [n === "Diesel (L)" ? `${num(v, 0)} L` : horas(v), n]}
                     />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Bar yAxisId="h" dataKey="trabalho_h" stackId="h" name="Trabalho" fill="#3f8c3e" radius={[0, 0, 0, 0]} />
+                    <Bar yAxisId="h" dataKey="trabalho_h" stackId="h" name="Trabalho" fill="#8cc63f" radius={[0, 0, 0, 0]} />
                     <Bar yAxisId="h" dataKey="ocioso_h" stackId="h" name="Ocioso" fill="#ecc55a" radius={[6, 6, 0, 0]} />
-                    <Area yAxisId="l" dataKey="litros" name="Diesel (L)" stroke="#945118" fill="#94511820" strokeWidth={2} />
+                    <Area yAxisId="l" dataKey="litros" name="Diesel (L)" stroke="#e6b034" fill="#e6b03422" strokeWidth={2} />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>

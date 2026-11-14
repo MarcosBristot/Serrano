@@ -40,10 +40,13 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
     enabled: Boolean(sessao),
   });
 
+  // A fazenda ativa fica também no estado: trocar não muda a lista do /me, então só o
+  // localStorage não faria a tela recalcular o nome.
+  const [ativa, setAtiva] = useState<string | null>(orgAtiva.get());
   const org = useMemo(() => {
     const lista = me.data?.organizacoes ?? [];
-    return lista.find((o) => o.organizacao_id === orgAtiva.get()) ?? lista[0];
-  }, [me.data]);
+    return lista.find((o) => o.organizacao_id === ativa) ?? lista[0];
+  }, [me.data, ativa]);
 
   useEffect(() => {
     if (org) orgAtiva.set(org.organizacao_id);
@@ -57,10 +60,12 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
     papel: org?.papel,
     trocarOrg: (id) => {
       orgAtiva.set(id);
+      setAtiva(id);
       qc.invalidateQueries();
     },
     sair: async () => {
       orgAtiva.set(null);
+      setAtiva(null);
       await supabase.auth.signOut();
       qc.clear();
     },

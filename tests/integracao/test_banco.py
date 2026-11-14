@@ -311,7 +311,7 @@ def test_particao_de_telemetria(db_backend: Database, admin: Conn, duas_orgs: di
             (org, maquina, sessao),
         )
         r = conn.execute(
-            "select tableoid::regclass::text as particao, extensions.st_y(geom::extensions.geometry)"
+            "select tableoid::regclass::text as particao, lat"
             " as lat from public.telemetria where sessao_id = %s",
             (sessao,),
         ).fetchone()

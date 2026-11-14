@@ -94,7 +94,10 @@ def calcular_cobertura(
     comprimento = 0.0
     for a, b in trechos:
         x, y = para_utm.transform(lon[a : b + 1], lat[a : b + 1])
-        linha = LineString(np.column_stack([x, y])).simplify(SIMPLIFICACAO_M)
+        ok = np.isfinite(x) & np.isfinite(y)  # buraco curto sem GPS dentro do trecho
+        if ok.sum() < 2:
+            continue
+        linha = LineString(np.column_stack([x[ok], y[ok]])).simplify(SIMPLIFICACAO_M)
         if linha.length > 0:
             linhas.append(linha)
             comprimento += linha.length

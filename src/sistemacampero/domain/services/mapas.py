@@ -34,8 +34,9 @@ def _estado(df: pd.DataFrame) -> np.ndarray:
 def trajeto(df: pd.DataFrame, max_pontos: int = 2000) -> dict[str, Any]:
     """FeatureCollection: linhas por estado (trabalho/parado) e paradas longas como pontos.
 
-    ``df``: ts, lat, lon, speed_kmh, engine_on (1 Hz, só pontos com posição). A linha é
-    simplificada (Douglas-Peucker em UTM) até caber em ``max_pontos`` vértices.
+    ``df``: ts, lat, lon, speed_kmh, engine_on e, opcional, peso_s (segundos que cada ponto
+    representa; telemetria em janelas). Só pontos com posição. A linha é simplificada
+    (Douglas-Peucker em UTM) até caber em ``max_pontos`` vértices.
     """
     vazio: dict[str, Any] = {"type": "FeatureCollection", "features": []}
     df = df.dropna(subset=["lat", "lon"]).reset_index(drop=True)
@@ -46,16 +47,19 @@ def trajeto(df: pd.DataFrame, max_pontos: int = 2000) -> dict[str, Any]:
     x, y = ida.transform(lon, lat)
     ts = pd.to_datetime(df["ts"], utc=True)
     segundos = (ts - ts.iloc[0]).dt.total_seconds().to_numpy(dtype=np.float64)
+    peso = df["peso_s"].to_numpy(dtype=np.float64) if "peso_s" in df else np.ones(len(df))
+    fim = segundos + peso - 1  # último segundo coberto por cada ponto
+    lacuna = segundos[1:] - fim[:-1] > LACUNA_TRAJETO_S
     estado = _estado(df)
 
-    quebra = np.r_[False, (np.diff(segundos) > LACUNA_TRAJETO_S) | (estado[1:] != estado[:-1])]
+    quebra = np.r_[False, lacuna | (estado[1:] != estado[:-1])]
     grupos = np.cumsum(quebra)
     trechos: list[tuple[str, np.ndarray]] = []
     paradas: list[dict[str, Any]] = []
     for g in np.unique(grupos):
         idx = np.flatnonzero(grupos == g)
         tipo = str(estado[idx[0]])
-        duracao = segundos[idx[-1]] - segundos[idx[0]]
+        duracao = fim[idx[-1]] - segundos[idx[0]]
         if tipo != "trabalho" and duracao >= PARADA_MIN_S:
             px, py = volta.transform(float(np.mean(x[idx])), float(np.mean(y[idx])))
             paradas.append(
@@ -72,7 +76,7 @@ def trajeto(df: pd.DataFrame, max_pontos: int = 2000) -> dict[str, Any]:
                 }
             )
         # Mantém continuidade entre trechos: começa no último ponto do anterior.
-        if idx[0] > 0 and not (segundos[idx[0]] - segundos[idx[0] - 1] > LACUNA_TRAJETO_S):
+        if idx[0] > 0 and not lacuna[idx[0] - 1]:
             idx = np.r_[idx[0] - 1, idx]
         if len(idx) >= 2:
             trechos.append((tipo, idx))

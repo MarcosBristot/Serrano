@@ -8,6 +8,8 @@ export interface Camadas {
   talhoes?: FC; // polígonos com properties.nome
   calor?: FC; // hexágonos com properties.l_ha
   trilha?: FC; // linhas com properties.tipo (trabalho|parado) + pontos de parada
+  linhas?: FC; // cabeceiras e linhas-guia do talhão (properties.tipo: cabeceira|linha_guia)
+  produtividade?: FC; // talhões pintados: properties.cor e properties.rotulo ("62 sc/ha")
 }
 
 const ESTILO: maplibregl.StyleSpecification = {
@@ -53,7 +55,9 @@ export function Mapa({ camadas, className = "h-[520px]", enquadrar = true }: { c
     (m.getSource("talhoes") as maplibregl.GeoJSONSource).setData(c.talhoes ?? VAZIO);
     (m.getSource("calor") as maplibregl.GeoJSONSource).setData(c.calor ?? VAZIO);
     (m.getSource("trilha") as maplibregl.GeoJSONSource).setData(c.trilha ?? VAZIO);
-    const b = enquadrar ? limites([c.trilha, c.calor, c.talhoes]) : null;
+    (m.getSource("linhas") as maplibregl.GeoJSONSource).setData(c.linhas ?? VAZIO);
+    (m.getSource("produtividade") as maplibregl.GeoJSONSource).setData(c.produtividade ?? VAZIO);
+    const b = enquadrar ? limites([c.trilha, c.calor, c.produtividade ?? c.talhoes]) : null;
     if (b) m.fitBounds(b, { padding: 48, maxZoom: 16, duration: 600 });
   };
 
@@ -71,6 +75,8 @@ export function Mapa({ camadas, className = "h-[520px]", enquadrar = true }: { c
       m.addSource("talhoes", { type: "geojson", data: VAZIO });
       m.addSource("calor", { type: "geojson", data: VAZIO });
       m.addSource("trilha", { type: "geojson", data: VAZIO });
+      m.addSource("linhas", { type: "geojson", data: VAZIO });
+      m.addSource("produtividade", { type: "geojson", data: VAZIO });
       m.addLayer({
         id: "calor", type: "fill", source: "calor",
         paint: {
@@ -78,12 +84,23 @@ export function Mapa({ camadas, className = "h-[520px]", enquadrar = true }: { c
           "fill-opacity": 0.72,
         },
       });
+      m.addLayer({ id: "produtividade", type: "fill", source: "produtividade", paint: { "fill-color": ["get", "cor"], "fill-opacity": 0.62 } });
+      m.addLayer({ id: "produtividade-borda", type: "line", source: "produtividade", paint: { "line-color": "#ffffff", "line-width": 1.5, "line-opacity": 0.7 } });
       m.addLayer({ id: "talhoes-fundo", type: "fill", source: "talhoes", paint: { "fill-color": "#f9eecb", "fill-opacity": 0.08 } });
       m.addLayer({ id: "talhoes-borda", type: "line", source: "talhoes", paint: { "line-color": "#f9eecb", "line-width": 2.5 } });
       m.addLayer({
         id: "talhoes-nome", type: "symbol", source: "talhoes",
         layout: { "text-field": ["get", "nome"], "text-size": 13, "text-font": ["Open Sans Semibold"] },
         paint: { "text-color": "#fff", "text-halo-color": "#1c3b1f", "text-halo-width": 1.6 },
+      });
+      // O tracejado não aceita expressão por feição: uma camada por tipo de linha.
+      m.addLayer({
+        id: "linhas", type: "line", source: "linhas", filter: ["==", ["get", "tipo"], "cabeceira"],
+        paint: { "line-color": "#7dd3fc", "line-width": 2 },
+      });
+      m.addLayer({
+        id: "linhas-guia", type: "line", source: "linhas", filter: ["==", ["get", "tipo"], "linha_guia"],
+        paint: { "line-color": "#c4b5fd", "line-width": 1.6, "line-dasharray": [3, 2] },
       });
       m.addLayer({
         id: "trilha", type: "line", source: "trilha", filter: ["==", ["geometry-type"], "LineString"],
@@ -109,6 +126,18 @@ export function Mapa({ camadas, className = "h-[520px]", enquadrar = true }: { c
         const p = e.features?.[0]?.properties;
         if (p) new maplibregl.Popup().setLngLat(e.lngLat).setHTML(`<b>Parada de ${p.minutos} min</b><br/>${p.motor_ligado ? "motor ligado" : "motor desligado"}`).addTo(m);
       });
+      m.on("click", ["linhas", "linhas-guia"], (e) => {
+        const p = e.features?.[0]?.properties;
+        if (!p) return;
+        const rotulo = p.tipo === "cabeceira" ? "Cabeceira" : Number(p.subtipo) === 1 ? "Linha-guia reta (AB)" : "Linha-guia curva";
+        const quando = p.gravado_em ? new Date(String(p.gravado_em)).toLocaleDateString("pt-BR") : null;
+        new maplibregl.Popup().setLngLat(e.lngLat).setHTML(`<b>${rotulo}</b><br/>${p.talhao}${quando ? ` · gravada em ${quando}` : ""}`).addTo(m);
+      });
+      m.addLayer({
+        id: "produtividade-rotulo", type: "symbol", source: "produtividade",
+        layout: { "text-field": ["get", "rotulo"], "text-size": 13, "text-font": ["Open Sans Semibold"] },
+        paint: { "text-color": "#fff", "text-halo-color": "#0c1f11", "text-halo-width": 1.8 },
+      });
       pronto.current = true;
       aplicar();
     });
@@ -120,7 +149,7 @@ export function Mapa({ camadas, className = "h-[520px]", enquadrar = true }: { c
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(aplicar, [camadas.talhoes, camadas.calor, camadas.trilha]);
+  useEffect(aplicar, [camadas.talhoes, camadas.calor, camadas.trilha, camadas.linhas, camadas.produtividade]);
 
   return <div ref={div} className={`overflow-hidden rounded-2xl ${className}`} />;
 }

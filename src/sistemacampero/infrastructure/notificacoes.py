@@ -95,6 +95,33 @@ class Notificador:
         else:
             raise RuntimeError(f"tipo de destino sem envio implementado: {destino['tipo']}")
 
+    def resumo(self, destino: dict[str, Any], titulo: str, texto: str) -> None:
+        """Resumo semanal: texto pronto (o mesmo que vai para o WhatsApp)."""
+        if destino["tipo"] == "webhook":
+            corpo = json.dumps(
+                {"evento": "resumo.semanal", "titulo": titulo, "texto": texto}, ensure_ascii=False
+            ).encode()
+            cabecalhos = {"Content-Type": "application/json"}
+            segredo = self._cifra.decifrar(destino.get("segredo_cifrado"))
+            if segredo:
+                cabecalhos["X-Serrano-Assinatura"] = assinatura_webhook(
+                    segredo, corpo, int(time.time())
+                )
+            resp = self._http.post(destino["destino"], content=corpo, headers=cabecalhos)
+            if resp.status_code >= 300:
+                raise RuntimeError(f"webhook respondeu HTTP {resp.status_code}")
+        elif destino["tipo"] == "email":
+            if not self._smtp:
+                raise RuntimeError("SMTP não configurado")
+            msg = EmailMessage()
+            msg["Subject"] = f"[Serrano] {titulo}"
+            msg["From"] = self._smtp["remetente"]
+            msg["To"] = destino["destino"]
+            msg.set_content(texto.replace("*", ""))
+            self._enviar_email(msg)
+        else:
+            raise RuntimeError(f"tipo de destino sem envio implementado: {destino['tipo']}")
+
     def convite(self, para: str, papel: str, token: str) -> None:
         if not self._smtp or not self._frontend:
             raise RuntimeError("SMTP ou FRONTEND_URL não configurados")

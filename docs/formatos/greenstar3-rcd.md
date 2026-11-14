@@ -1,55 +1,77 @@
-# GreenStar 3 2630 (RCD) — anotações de engenharia reversa
+# GreenStar 3 2630 (RCD): formato decifrado
 
-Estado: **em estudo**, sem leitor ainda. Amostra: colheitadeira S540 (`1CQS540ATG0110336`),
-safra de trigo 2022 (`CoxilhaGrand_Trigo22`), pasta `GS3_2630/<cliente>/RCD/`.
+Estado: **leitor em produção** (`infrastructure/parsers/john_deere_gs3/`), validado em 321
+operações reais de uma colheitadeira S540 (`1CQS540ATG0110336`), safras 2022 a 2026: todas
+decodificadas por inteiro (3,67 milhões de registros, ~1.000 h de colheita).
 
 ## Estrutura da pasta
 
 | Caminho | Conteúdo |
 |---|---|
-| `RCD/EIC/Documentation/<xx>/<uuid>.fdl` | XML: cadastro (cliente, fazenda, talhão, cultura, máquina) e **lista de colunas** gravadas |
-| `RCD/EIC/Documentation/<xx>/<uuid>.fdd` | Binário com os registros; o `.fdl` aponta para ele (`LogDataBlock logDataProcessor="EvenByteDelta"`) |
-| `RCD/EIC/Documentation/<xx>/<uuid>.fdr` | Ainda não analisado (605 arquivos, sem `.fdl` correspondente) |
-| `RCD/EIC/Fields`, `RCD/StoredMaps` | Contornos (`.fdshape`), linhas-guia (`.pth`) e mapas |
+| `RCD/EIC/Documentation/<xx>/<uuid>.fdl` | XML: cadastro (cliente, fazenda, talhão, cultura, máquina, plataforma), colunas e **hora de início de cada bloco** (`LogTaskRegion@timeStamp`, UTC) |
+| `RCD/EIC/Documentation/<xx>/<uuid>.fdd` | Binário `EvenByteDelta` com os registros |
+| `RCD/EIC/Documentation/<xx>/<uuid>.fdr` | Não analisado (sem `.fdl` correspondente) |
+| `RCD/EIC/Fields`, `RCD/StoredMaps` | Contornos (`.fdshape`), linhas-guia (`.pth`) e mapas: não lidos ainda |
 
-321 pares `.fdl`/`.fdd`; o maior `.fdd` tem 4 MB.
+Na expansão do .zip o par `.fdl` + `.fdd` vira um arquivo só (`domain.ingestao.empacotar_rcd`,
+tipo `rcd`, tecnologia `gs3`); metade sem par é ignorada. Enviar `.fdd` avulso é recusado com
+orientação para mandar a pasta `GS3_2630` em .zip.
 
-## Colunas declaradas no `.fdl` (exemplo da S540)
+## `.fdd`
 
-- Colheita: `vrHarvestMoisture` (%), `vrYieldWetMass` (kg), `dtHeaderStatus`, latência de 10 s nos sensores de rendimento e umidade.
-- Plataforma: 5 seções de 1.520 mm (`vrSectionWidth`, `vrLateralOffset` de −3.040 a +3.040 mm), estado por seção (`dtRecordingStatus`).
-- Máquina: `vrFuelRatePerHour` (L/h), `vrVehicleSpeed` (km/h).
-- GPS: `vrLatitude`, `vrLongitude`, `vrHeading`, `vrDeltaDistance`, `vrElevation`, tipo de navegação e de sinal, precisão horizontal e vertical.
-- Clima e solo (preenchidos à mão no monitor): umidade do ar, temperaturas, vento, céu e umidade do solo.
+Uma sequência de **blocos** (um por `LogTaskRegion` do `.fdl`, na mesma ordem). Cada bloco:
 
-Cada coluna tem um `columnID` (ex.: `MeasElement929`, `GPSLatitude_5140`) que reaparece no `.fdd`.
+1. `u16` 1 (primeiro bloco) ou 4 (seguintes), UUIDs em texto (`u16` tamanho + ASCII).
+2. Lista de colunas: `01 00 02 00 <u16 n>` e, por coluna,
+   `u16 tipo, u16 _, u16 tam_nome, nome, u8 cru`, depois
+   * numérica (tipos 3, 4, 5): `u16 24` + 3 × `float64` (**resolução**, ?, **base**);
+   * enumerada (tipo 1): `u16 qtd, u16 tamanho`, opções (`u16` + texto). Índice 0 = ligado.
+3. Registros de ~1 s (`ElapsedTime` sobe 1001-1003 ms):
 
-## Cabeçalho do `.fdd`
+| Campo | Formato |
+|---|---|
+| cabeçalho | `u16 2`, `u8 n_controle`, `u8 omitidas`, `u32` (0x70 ou 0xE0, não usado) |
+| máscara A | `u32`: coluna crua que **repete** o valor anterior |
+| máscara B | `u24`: coluna cujo valor vem **absoluto** no fim do registro |
+| bloco fixo | uma entrada por coluna não crua, na ordem: `i16` (tipo 3) ou `i32` (tipo 4) com o **delta**; `u16` com o estado **absoluto** (enumeradas) |
+| controle | `n_controle` valores marcados (`u16 tipo, u16 tamanho, dados`) |
+| crus | um valor marcado por bit de B, em ordem crescente (`float64`, `float32` ou inteiro) |
 
-Começa com UUIDs em texto (sessão, tarefa) e depois uma definição por coluna:
+* As máscaras começam na **9ª coluna** (bit 0 = coluna 8), com 5 ou 6 seções na plataforma.
+* Coluna não crua com bit em B sai do bloco fixo e o valor cru zera a referência do delta (é
+  assim que o rumo passa de 359° para 0°).
+* Coluna crua fora de A e de B fica **ausente** naquele registro.
+* `omitidas` é uma máscara das primeiras colunas que não vêm (registro de **evento**, de menos de
+  1 s, quando a plataforma sobe ou desce): a coluna fica nula e o próximo delta parte do **valor
+  físico zero** (não da base do bloco; com base de 13 % de umidade o erro seria de 13 pontos).
+* Valor físico = `base + soma_dos_deltas × resolução`.
 
-```
-<tipo u16> <tam_total u16> <tam_nome u16> <nome ASCII> <flag u8?> <0x18 u16> <3 × float64>
-```
+## Colunas (S540, plataforma 625F de 7,6 m)
 
-Nos três `float64` de cada coluna numérica, o observado foi:
+| Representação no `.fdl` | Unidade | Uso no Serrano |
+|---|---|---|
+| `vrHarvestMoisture` | % | diagnóstico (umidade média ponderada pela massa) |
+| `vrYieldWetMass` | kg por registro | diagnóstico (massa úmida total) |
+| `dtHeaderStatus`, `dtRecordingStatus` (5-6 seções) | enumerado | ainda não usado |
+| `vrFuelRatePerHour` | L/h | `fuel_rate_lph` |
+| `vrVehicleSpeed` | km/h | `speed_kmh` |
+| `vrDistanceTraveled` (`DeltaDistance`) | cm por registro | `speed_alt_kmh` |
+| `vrLatitude`/`vrLongitude` `_5140` | graus | posição (o `_5141` é a projeção na plataforma) |
+| clima e solo (`TgtElement20..32`) | — | digitados no monitor; ignorados |
 
-| Coluna | 1º | 2º | 3º |
-|---|---|---|---|
-| `GPSLatitude_5140` | 1,0e-9 (resolução?) | 4,5e-4 | −28,1129 (base) |
-| `GPSLongitude_5140` | 1,0e-9 | 4,5e-4 | −52,93 (base) |
-| `GPSHeading_5140` | 0,01 | 5,0 | 275,0 |
+Conferência com a realidade (trigo, Coxilha Grande, 2022): 12,7 h, 528 L (41,5 L/h, 13,4 L/ha),
+39,3 ha a 4,4 km/h e 200,6 t de massa úmida a 17,9 % de umidade (5,1 t/ha). A plataforma fica
+ligada 96 % do tempo a 4,4 km/h e levantada nas manobras a ~7 km/h.
 
-Hipótese: `valor = base + inteiro × resolução`, com os registros guardando **diferenças**
-(daí o nome *EvenByteDelta*) em tamanho variável. A latitude absoluta aparece como `float64`
-só no cabeçalho (bytes 1345 e 1925 da amostra).
+## Validação da produtividade
 
-## Próximos passos
+Massa seca (umidade de comercialização: soja 14 %, trigo 13 %) sobre a área colhida com a
+plataforma baixa, mediana por safra: soja 32,6 (21/22, seca), 29,5 (22/23, seca), 79,2 (23/24),
+51,0 (24/25, seca) e 81,5 sc/ha (25/26); trigo 70,2 (2022), 34,2 (2023, El Niño), 59,5 (2024) e
+68,9 sc/ha (2025). Bate com o histórico do RS.
 
-1. Mapear o fim do cabeçalho e o início dos registros. Descobrir o tamanho de cada registro e
-   como os deltas são codificados (provavelmente inteiros de 1, 2 ou 4 bytes conforme o
-   tamanho do delta, alinhados em byte par).
-2. Validar com o que se sabe do campo: a trilha GPS precisa ficar dentro do contorno de
-   Coxilha Grande; a velocidade, entre 3 e 8 km/h colhendo; a umidade do trigo, entre 11% e 20%.
-3. Só então escrever o adapter (`parsers/john_deere_gs3/`), com o rendimento e a umidade
-   entrando como colunas novas no schema universal.
+## Em aberto
+
+* Mapa de produtividade ponto a ponto (hoje o resumo é por operação).
+* Significado do 2º `float64` das colunas e do `u32` do cabeçalho do registro.
+* `.fdr`, `.fdshape` e `.pth`.

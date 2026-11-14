@@ -46,13 +46,14 @@ def test_upload_processa_e_grava_tudo(
     assert sessao and sessao["operacao"] == "plantio" and sessao["qualidade_score"] == 100
     assert sessao["talhao_origem"] == "monitor"  # talhão do cabeçalho do .jdl
     assert (
-        um(admin, "select count(*) from public.telemetria where sessao_id = %s", sessao["id"])
+        # telemetria em janelas: os segundos somados batem com as amostras do arquivo
+        um(admin, "select sum(peso_s) from public.telemetria where sessao_id = %s", sessao["id"])
         == sessao["n_amostras"]
     )
     assert (
         um(
             admin,
-            "select count(*) from public.telemetria where sessao_id = %s and geom is not null",
+            "select sum(peso_s) from public.telemetria where sessao_id = %s and lat is not null",
             sessao["id"],
         )
         == sessao["n_amostras"]
@@ -197,6 +198,8 @@ def test_zip_do_pendrive(
         "masterdata": 1,
         "gjson": 0,
         "contorno": 0,
+        "rcd": 0,
+        "isoxml": 0,
         "duplicados": 1,
     }
 

@@ -56,7 +56,7 @@ jobs:
           version: "0.12.17"
       - name: Auditoria de dependências
         run: |
-          uv export --frozen --no-dev --no-hashes --format requirements-txt > requisitos.txt
+          uv export --frozen --no-dev --no-hashes --no-emit-project --format requirements-txt > requisitos.txt
           uvx pip-audit -r requisitos.txt --strict
 
   imagem:

@@ -6,7 +6,8 @@ import { api } from "./api";
 import type { Talhao } from "./tipos";
 
 export function useTalhoes() {
-  return useQuery({ queryKey: ["talhoes"], queryFn: () => api<Talhao[]>("/talhoes") });
+  // Só os ativos: repetidos agrupados ("Mae_Aveia22" = "Mãe") ficam guardados, mas fora da tela.
+  return useQuery({ queryKey: ["talhoes"], queryFn: () => api<Talhao[]>("/talhoes", { params: { ativo: true } }) });
 }
 
 /** Contornos de todos os talhões como FeatureCollection (para o mapa). */
@@ -36,4 +37,14 @@ export function useContornos(): { dados: FC | undefined; carregando: boolean } {
         }
       : undefined;
   return { dados, carregando: lista.isLoading || !prontos };
+}
+
+/** Cabeceiras e linhas-guia (ex.: do OMNI do pulverizador) para o mapa. */
+export function useLinhasTalhao(ativo = true) {
+  return useQuery({
+    queryKey: ["talhoes-linhas"],
+    queryFn: () => api<FC>("/talhoes/linhas"),
+    staleTime: 5 * 60_000,
+    enabled: ativo,
+  });
 }
