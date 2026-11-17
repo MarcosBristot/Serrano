@@ -62,7 +62,8 @@ CONSULTAS: dict[str, tuple[str, str, str]] = {
     "telemetria": (
         "(x.ts at time zone o.fuso) as data_hora_local, m.serial as maquina_serial,"
         " tl.nome as talhao, x.lat, x.lon, x.gps_valid, x.speed_kmh, x.engine_rpm,"
-        " x.engine_load_pct, x.fuel_rate_lph, x.fuel_total_l, x.engine_hours, x.engine_on",
+        " x.engine_load_pct, x.fuel_rate_lph, x.fuel_total_l, x.engine_hours, x.engine_on,"
+        " x.peso_s as segundos",
         "(x.ts at time zone o.fuso)::date",
         " from public.telemetria x join public.organizacoes o on o.id = x.organizacao_id"
         " join public.maquinas m on m.id = x.maquina_id"

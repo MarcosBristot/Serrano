@@ -84,3 +84,22 @@ grant usage on schema public to anon, authenticated, service_role;
 alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
 alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
 alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
+
+-- Hospedagem em casa (HOSPEDAGEM=casa): o login é do Supabase Auth, mas os dados ficam neste banco.
+-- A API copia aqui o usuário do JWT já validado, para as chaves estrangeiras de auth.users valerem.
+do $$
+begin
+    if not exists (select 1 from pg_roles where rolname = 'campero_backend') then
+        create role campero_backend login noinherit nobypassrls nocreatedb nocreaterole;
+    end if;
+end
+$$;
+
+create or replace function auth.espelhar_usuario(p_id uuid, p_email text) returns void
+language sql security definer set search_path = ''
+as $$
+    insert into auth.users (id, email) values (p_id, p_email) on conflict do nothing;
+$$;
+revoke all on function auth.espelhar_usuario(uuid, text) from public;
+grant usage on schema auth to campero_backend;
+grant execute on function auth.espelhar_usuario(uuid, text) to campero_backend;

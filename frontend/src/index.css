@@ -4,31 +4,88 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Tema "campo à noite": escalas invertidas (950 = texto claro, 50 = superfície escura). */
+:root {
+  color-scheme: dark;
+  --folha-50: 26 52 31;    --folha-100: 33 64 38;   --folha-200: 44 84 49;   --folha-300: 62 112 64;
+  --folha-400: 86 150 78;  --folha-500: 116 180 100; --folha-600: 146 204 126; --folha-700: 170 220 150;
+  --folha-800: 204 232 194; --folha-900: 226 238 220; --folha-950: 245 248 240;
+  --trigo-50: 64 50 18;    --trigo-100: 82 64 22;   --trigo-200: 120 92 30;  --trigo-300: 236 197 90;
+  --trigo-400: 230 176 52; --trigo-500: 214 146 31; --trigo-600: 240 196 96; --trigo-700: 245 214 140;
+  --trigo-800: 249 230 185; --trigo-900: 253 246 228;
+  --terra-50: 52 41 30;    --terra-100: 68 54 40;   --terra-300: 201 180 154; --terra-500: 168 136 100;
+  --terra-700: 214 196 172; --terra-900: 240 233 222;
+  --superficie: 17 38 22;
+}
+
 @layer base {
   html { -webkit-font-smoothing: antialiased; }
-  body { @apply bg-[#f6f7f2] text-folha-950 font-sans; }
+  body {
+    @apply text-folha-950 font-sans;
+    background-color: #0c1f11;
+    background-image:
+      radial-gradient(1100px 600px at 15% -10%, rgba(140, 198, 63, 0.18), transparent 60%),
+      radial-gradient(900px 600px at 110% 110%, rgba(214, 146, 31, 0.14), transparent 60%),
+      linear-gradient(180deg, rgba(7, 21, 11, 0.55) 0%, rgba(7, 21, 11, 0.86) 40%, rgba(7, 21, 11, 0.94) 100%),
+      url("/campo.svg");
+    background-size: auto, auto, auto, cover;
+    background-attachment: fixed;
+    background-position: center;
+  }
   h1, h2, h3 { @apply font-display tracking-tight; }
+  ::selection { background: rgba(140, 198, 63, 0.35); }
 }
 
 @layer components {
-  .cartao { @apply bg-white rounded-2xl shadow-cartao border border-folha-950/5; }
+  /* Vidro sobre a lavoura */
+  .cartao {
+    @apply rounded-2xl border border-white/10 shadow-cartao backdrop-blur-md;
+    background: linear-gradient(160deg, rgba(34, 70, 40, 0.62), rgba(14, 32, 18, 0.72));
+  }
+  .cartao-destaque {
+    @apply cartao;
+    background: linear-gradient(150deg, rgba(140, 198, 63, 0.22), rgba(20, 48, 26, 0.78) 55%);
+  }
   .btn { @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed; }
-  .btn-primario { @apply btn bg-folha-700 text-white hover:bg-folha-800 active:bg-folha-900 shadow-sm; }
-  .btn-secundario { @apply btn bg-white text-folha-900 border border-folha-900/15 hover:bg-folha-50; }
-  .btn-trigo { @apply btn bg-trigo-400 text-folha-950 hover:bg-trigo-300; }
-  .campo { @apply w-full rounded-xl border border-folha-900/15 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-folha-500 focus:ring-4 focus:ring-folha-500/15; }
+  .btn-primario { @apply btn bg-broto-500 text-noite-950 hover:bg-broto-400 active:bg-broto-600 shadow-[0_0_24px_rgba(140,198,63,.35)]; }
+  .btn-secundario { @apply btn border border-white/15 bg-white/5 text-folha-950 hover:bg-white/10; }
+  .btn-trigo { @apply btn bg-trigo-400 text-noite-950 hover:bg-trigo-300; }
+  .campo { @apply w-full rounded-xl border border-white/15 bg-white/5 px-3.5 py-2.5 text-sm text-folha-950 outline-none transition placeholder:text-folha-900/40 focus:border-broto-500 focus:ring-4 focus:ring-broto-500/20; }
+  .campo option { @apply bg-noite-800 text-folha-950; }
   .rotulo { @apply block text-xs font-semibold uppercase tracking-wide text-folha-900/60 mb-1.5; }
-  .tabela th { @apply text-left text-xs font-semibold uppercase tracking-wide text-folha-900/50 px-4 py-3 bg-folha-50/60; }
-  .tabela td { @apply px-4 py-3 border-t border-folha-900/5 text-sm; }
+  .tabela th { @apply text-left text-xs font-semibold uppercase tracking-wide text-folha-900/50 px-4 py-3 bg-white/5; }
+  .tabela td { @apply px-4 py-3 border-t border-white/5 text-sm; }
+  .tabela tbody tr { @apply transition hover:bg-white/[0.03]; }
+  .aba { @apply rounded-lg px-3 py-1.5 text-sm font-semibold text-folha-900/60 transition hover:text-folha-950; }
+  .aba-ativa { @apply bg-broto-500 text-noite-950 shadow-[0_0_18px_rgba(140,198,63,.35)] hover:text-noite-950; }
 }
 
-/* Textura sutil de lavoura (linhas de plantio) para fundos de destaque */
+/* Fundo de destaque (login, boas-vindas) */
 .fundo-lavoura {
   background-image:
-    repeating-linear-gradient(115deg, rgba(255,255,255,.05) 0 2px, transparent 2px 22px),
-    radial-gradient(1200px 600px at 10% 10%, #3f8c3e 0%, transparent 60%),
-    radial-gradient(900px 500px at 90% 90%, #d6921f 0%, transparent 55%),
-    linear-gradient(160deg, #1c3b1f 0%, #224824 55%, #3d2e21 100%);
+    linear-gradient(160deg, rgba(7, 21, 11, 0.35), rgba(7, 21, 11, 0.85)),
+    url("/campo.svg");
+  background-size: cover;
+  background-position: center;
 }
 
 .maplibregl-ctrl-attrib { font-size: 10px; }
+.maplibregl-popup-content { @apply rounded-xl bg-noite-800 px-3 py-2 text-folha-950 shadow-cartao; }
+.maplibregl-popup-tip { border-top-color: #132a18 !important; border-bottom-color: #132a18 !important; }
+.recharts-tooltip-wrapper .recharts-default-tooltip { @apply rounded-xl !border-white/10 !bg-noite-800/95 text-folha-950; }
+.recharts-legend-item-text { color: rgba(226, 238, 220, 0.8) !important; }
+
+/* Impressão do fechamento: fundo branco e a paleta clara de volta (o tema escuro é invertido). */
+@media print {
+  :root {
+    --folha-50: 241 248 241; --folha-100: 221 239 220; --folha-200: 188 223 186; --folha-300: 143 199 141;
+    --folha-400: 95 169 93; --folha-500: 63 140 62; --folha-600: 47 112 48; --folha-700: 39 90 41;
+    --folha-800: 34 72 36; --folha-900: 28 59 31; --folha-950: 13 32 17;
+  }
+  body { background: #fff !important; }
+  aside, header, .nao-imprimir, .maplibregl-ctrl { display: none !important; }
+  main { padding: 0 !important; max-width: none !important; }
+  .lg\:pl-64 { padding-left: 0 !important; }
+  .cartao, .cartao-destaque { background: #fff !important; border-color: #d6e4d3 !important; box-shadow: none !important; backdrop-filter: none !important; break-inside: avoid; }
+  .tabela th { background: #f1f8f1 !important; }
+}

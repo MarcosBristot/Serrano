@@ -143,6 +143,15 @@ def test_cobertura_sem_sobreposicao_bate_com_a_estimada() -> None:
     assert c.geometria.is_valid and isinstance(c.geometria, MultiPolygon)
 
 
+def test_buraco_curto_sem_gps_no_meio_do_trecho_nao_quebra() -> None:
+    # GreenStar 3: segundos sem registro viram linhas sem posição dentro do trecho de trabalho.
+    df = _passadas(n=1, comprimento_m=500, espacamento_m=5.0)
+    df.loc[100:101, ["lat", "lon"]] = np.nan
+    df.loc[100:101, "gps_valid"] = False
+    c = calcular_cobertura(df, largura_m=5.0)
+    assert c is not None and c.area_ha == pytest.approx(0.25, rel=0.03)
+
+
 def test_sobreposicao_conta_uma_vez_so() -> None:
     df = _passadas(n=5, comprimento_m=500, espacamento_m=2.5)  # metade da largura
     c = calcular_cobertura(df, largura_m=5.0)

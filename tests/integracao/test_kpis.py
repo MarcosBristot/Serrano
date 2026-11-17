@@ -108,6 +108,17 @@ def test_sessao_em_dois_talhoes_reparte_por_talhao_do_ponto(
     ranking = _kpi(client, org, "kpis/ranking", por="talhao")
     assert {r["nome"] for r in ranking} == {"Talhao Teste", "(sem talhão)"}
 
+    # Correção manual: a operação inteira passa para o talhão escolhido, inclusive no ranking.
+    novo = client.post("/api/v1/talhoes", json={"nome": "Corrigido"}, headers=org["auth"]).json()
+    sessao = client.get("/api/v1/sessions", headers=org["auth"]).json()["itens"][0]["id"]
+    r = client.patch(
+        f"/api/v1/sessions/{sessao}", json={"talhao_id": novo["id"]}, headers=org["auth"]
+    )
+    assert r.status_code == 200, r.text
+    drenar(worker)
+    assert {x["talhao"] for x in _diarias(admin, org)} == {"Corrigido"}
+    assert {r["nome"] for r in _kpi(client, org, "kpis/ranking", por="talhao")} == {"Corrigido"}
+
 
 def test_resumo_custo_e_preco_do_combustivel(
     client: TestClient, worker: Worker, org: dict[str, Any]
@@ -187,7 +198,7 @@ def test_trajeto_e_mapa_de_calor(
     linhas = [f for f in fc["features"] if f["geometry"]["type"] == "LineString"]
     assert linhas and all(f["properties"]["tipo"] == "trabalho" for f in linhas)
     assert sum(len(f["geometry"]["coordinates"]) for f in linhas) <= 200
-    assert fc["properties"]["pontos_originais"] > 1700
+    assert fc["properties"]["pontos_originais"] > 60  # 30 min em janelas de 20 s
 
     calor = _kpi(client, org, "mapas/calor", inicio=DIA, fim=DIA, tamanho_m=100)
     assert calor["features"]
@@ -230,7 +241,7 @@ def test_rotas_legadas_de_telemetria(
     )
     assert primeira.status_code == 200
     pontos = primeira.json()
-    assert len(pontos) == 300 and set(pontos[0]) == {
+    assert 0 < len(pontos) <= 300 and set(pontos[0]) == {
         "timestamp",
         "latitude",
         "longitude",
@@ -249,14 +260,15 @@ def test_rotas_legadas_de_telemetria(
         )
         vistos += len(r.json())
         cursor = r.headers.get("x-next-cursor")
-    assert vistos == 601  # 10 min a 1 Hz (inclusive)
+    assert 28 <= vistos <= 35  # 10 min, um ponto por janela de 20 s
 
-    a_cada_10 = client.get(
+    # Espaçamento pedido maior que a janela gravada (20 s): um ponto por minuto.
+    a_cada_60 = client.get(
         "/api/v1/telemetry/machine/SINTETICO0001",
-        params={"passo_s": 10, "limit": 5000},
+        params={"passo_s": 60, "limit": 5000},
         headers=org["auth"],
     ).json()
-    assert 59 <= len(a_cada_10) <= 61
+    assert 9 <= len(a_cada_60) <= 11
     assert client.get("/api/v1/telemetry/machine/NAOEXISTE", headers=org["auth"]).status_code == 404
 
     stats = client.get("/api/v1/telemetry/stats/SINTETICO0001", headers=org["auth"]).json()

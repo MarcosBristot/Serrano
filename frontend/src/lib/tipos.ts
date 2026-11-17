@@ -151,3 +151,127 @@ export interface Membro {
   email: string | null;
   papel: Papel;
 }
+
+/** Jornada: os arquivos do monitor da mesma máquina agrupados (o que o produtor chama de operação). */
+export interface Jornada {
+  id: string;
+  maquina_id: string;
+  serial: string;
+  apelido: string | null;
+  inicio: string;
+  fim: string;
+  talhao_id: string | null;
+  talhao_nome: string | null;
+  talhoes: number;
+  operacao: string | null;
+  arquivos: number;
+  motor_h: number;
+  trabalho_h: number;
+  ocioso_h: number;
+  litros: number;
+  litros_trabalho: number;
+  litros_ocioso: number;
+  area_ha: number;
+  distancia_km: number;
+  l_ha: number | null;
+  ha_h: number | null;
+  ociosidade_pct: number | null;
+  custo_rs: number | null;
+  curta: boolean;
+}
+
+export interface JornadaDetalhe extends Jornada {
+  arquivos_detalhe: {
+    id: string;
+    inicio: string;
+    fim: string;
+    n_amostras: number;
+    qualidade_score: number | null;
+    motor_h: number | null;
+    litros_integral: number | null;
+  }[];
+}
+
+/** GET /maquinas/visao: máquina com uso real e somas do período. */
+export interface MaquinaVisao {
+  id: string;
+  serial: string;
+  apelido: string | null;
+  modelo: string | null;
+  fabricante: string | null;
+  tipo: "trator" | "colheitadeira" | "pulverizador";
+  ultima_atividade: string | null;
+  ultimo_talhao: string | null;
+  jornadas: number;
+  motor_h: number;
+  trabalho_h: number;
+  ocioso_h: number;
+  litros: number;
+  litros_ocioso: number;
+  area_ha: number;
+  distancia_km: number;
+  talhoes: number;
+  custo_rs: number | null;
+  custo_ocioso_rs: number | null;
+  massa_kg: number | null;
+  l_ha: number | null;
+  ha_h: number | null;
+  ociosidade_pct: number | null;
+  rs_ha: number | null;
+  t_ha: number | null;
+}
+
+export interface SafraResumo {
+  safra: string;
+  cultura: string | null;
+  area_colhida_ha: number;
+  sacas: number;
+  sc_ha: number | null;
+  inicio: string;
+  fim: string;
+}
+
+export interface OperacaoMaquina {
+  operacao: string;
+  motor_h: number | null;
+  litros: number | null;
+  custo_rs: number | null;
+  maquinas: number;
+}
+
+export interface TalhaoFechamento {
+  talhao_id: string | null;
+  talhao_nome: string | null;
+  cultura: string | null;
+  variedades: string[];
+  area_talhao_ha: number | null;
+  area_colhida_ha: number;
+  sacas: number;
+  sc_ha: number | null;
+  vs_media_pct: number | null;
+  umidade_pct: number | null;
+  colheita_inicio: string;
+  colheita_fim: string;
+  janela_inicio: string;
+  motor_h: number;
+  litros: number;
+  custo_diesel_rs: number | null;
+  l_ha: number | null;
+  custo_diesel_ha: number | null;
+  custo_diesel_saca: number | null;
+  operacoes_maquina: OperacaoMaquina[];
+}
+
+export interface Fechamento {
+  safra: string;
+  cultura: string | null;
+  area_colhida_ha: number;
+  sacas: number;
+  sc_ha: number | null;
+  motor_h: number;
+  litros: number;
+  custo_diesel_rs: number | null;
+  custo_diesel_saca: number | null;
+  horas_ha: number | null;
+  talhoes: TalhaoFechamento[];
+}

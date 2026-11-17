@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice">
+  <!-- Vista aérea de lavouras em retalhos: arte original do Serrano (fundo do painel). -->
+  <defs>
+    <pattern id="linhas-a" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(28)">
+      <rect width="9" height="9" fill="none"/><rect width="4" height="9" fill="#ffffff" opacity=".06"/>
+    </pattern>
+    <pattern id="linhas-b" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(-58)">
+      <rect width="3" height="7" fill="#000000" opacity=".12"/>
+    </pattern>
+    <pattern id="linhas-c" width="11" height="11" patternUnits="userSpaceOnUse" patternTransform="rotate(84)">
+      <rect width="5" height="11" fill="#ffffff" opacity=".05"/>
+    </pattern>
+    <pattern id="palha" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(12)">
+      <rect width="2" height="5" fill="#fff3c4" opacity=".14"/>
+    </pattern>
+    <radialGradient id="mata" cx="50%" cy="45%" r="60%">
+      <stop offset="0" stop-color="#1f4a24"/><stop offset="1" stop-color="#0f2a14"/>
+    </radialGradient>
+    <filter id="suave"><feGaussianBlur stdDeviation="1.2"/></filter>
+  </defs>
+  <rect width="1600" height="1000" fill="#173a1c"/>
+  <g filter="url(#suave)">
+    <!-- talhões -->
+    <path d="M0 0H430L395 250L0 300Z" fill="#3f7b34"/><path d="M0 0H430L395 250L0 300Z" fill="url(#linhas-a)"/>
+    <path d="M430 0H860L820 210L395 250Z" fill="#c9a24a"/><path d="M430 0H860L820 210L395 250Z" fill="url(#palha)"/>
+    <path d="M860 0H1290L1260 230L820 210Z" fill="#2f6a2f"/><path d="M860 0H1290L1260 230L820 210Z" fill="url(#linhas-b)"/>
+    <path d="M1290 0H1600V260L1260 230Z" fill="#7a9a3c"/><path d="M1290 0H1600V260L1260 230Z" fill="url(#linhas-c)"/>
+    <path d="M0 300L395 250L370 560L0 600Z" fill="#8a6a3e"/><path d="M0 300L395 250L370 560L0 600Z" fill="url(#linhas-b)"/>
+    <path d="M395 250L820 210L800 470L370 560Z" fill="#4c8a3a"/><path d="M395 250L820 210L800 470L370 560Z" fill="url(#linhas-a)"/>
+    <path d="M820 210L1260 230L1230 520L800 470Z" fill="#a8b44e"/><path d="M820 210L1260 230L1230 520L800 470Z" fill="url(#linhas-c)"/>
+    <path d="M1260 230L1600 260V560L1230 520Z" fill="#355f2a"/><path d="M1260 230L1600 260V560L1230 520Z" fill="url(#linhas-a)"/>
+    <path d="M0 600L370 560L350 1000H0Z" fill="#2d6a33"/><path d="M0 600L370 560L350 1000H0Z" fill="url(#linhas-c)"/>
+    <path d="M370 560L800 470L780 760L360 820Z" fill="#d1ab55"/><path d="M370 560L800 470L780 760L360 820Z" fill="url(#palha)"/>
+    <path d="M360 820L780 760L770 1000H350Z" fill="#5b8f3d"/><path d="M360 820L780 760L770 1000H350Z" fill="url(#linhas-b)"/>
+    <path d="M800 470L1230 520L1210 800L780 760Z" fill="#3b7a3a"/><path d="M800 470L1230 520L1210 800L780 760Z" fill="url(#linhas-a)"/>
+    <path d="M780 760L1210 800L1200 1000H770Z" fill="#9c7a46"/><path d="M780 760L1210 800L1200 1000H770Z" fill="url(#linhas-c)"/>
+    <path d="M1230 520L1600 560V1000H1200L1210 800Z" fill="#6f9e43"/><path d="M1230 520L1600 560V1000H1200L1210 800Z" fill="url(#linhas-b)"/>
+    <!-- mata ciliar e capões -->
+    <path d="M1210 800C1300 760 1380 840 1470 790S1600 820 1600 820V1000H1200Z" fill="url(#mata)"/>
+    <path d="M0 410C70 380 120 450 190 420S300 470 370 440L370 560L0 600Z" fill="url(#mata)" opacity=".9"/>
+    <g fill="#13361a">
+      <circle cx="610" cy="120" r="34"/><circle cx="650" cy="140" r="26"/><circle cx="1110" cy="360" r="30"/>
+      <circle cx="1140" cy="385" r="22"/><circle cx="215" cy="760" r="28"/><circle cx="250" cy="790" r="20"/>
+    </g>
+  </g>
+  <!-- estradas de chão -->
+  <path d="M0 302L395 252L820 212L1260 232L1600 262" stroke="#d9c79a" stroke-width="7" fill="none" opacity=".55"/>
+  <path d="M395 252L370 560L360 820L350 1000" stroke="#d9c79a" stroke-width="6" fill="none" opacity=".5"/>
+  <path d="M1260 232L1230 520L1210 800" stroke="#d9c79a" stroke-width="5" fill="none" opacity=".45"/>
+  <!-- curva de nível suave -->
+  <g fill="none" stroke="#ffffff" stroke-opacity=".05" stroke-width="2">
+    <path d="M-50 700C300 600 600 760 900 650S1400 560 1650 640"/>
+    <path d="M-50 760C300 660 600 820 900 710S1400 620 1650 700"/>
+    <path d="M-50 140C350 220 700 60 1000 160S1450 90 1650 150"/>
+  </g>
+</svg>

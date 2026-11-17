@@ -8,10 +8,14 @@ from sistemacampero.application.alertas import ServicoAlertas, ServicoNotificaco
 from sistemacampero.application.cadastro import ServicoCadastro
 from sistemacampero.application.equipe import ServicoEquipe
 from sistemacampero.application.exportacao import ServicoExportacao
+from sistemacampero.application.fechamento import ServicoFechamento
 from sistemacampero.application.ingestao import ExecutorDeJobs, ServicoIngestao
 from sistemacampero.application.kpis import ServicoKpis
+from sistemacampero.application.manutencao import ServicoManutencao
 from sistemacampero.application.processamento import ProcessadorDeArquivo
+from sistemacampero.application.resumo_semanal import ServicoResumoSemanal
 from sistemacampero.application.tenancy import ServicoTenancy
+from sistemacampero.application.titular import ServicoTitular
 from sistemacampero.domain.ingestao import TipoJob
 from sistemacampero.domain.ports import Armazenamento, VerificadorDeProntidao, VerificadorDeToken
 from sistemacampero.domain.services.rules import ConfigRegras
@@ -19,21 +23,27 @@ from sistemacampero.infrastructure.config import Settings
 from sistemacampero.infrastructure.notificacoes import Cifra, Notificador
 from sistemacampero.infrastructure.parsers.john_deere_gen4.masterdata import ler_cadastro_gen4
 from sistemacampero.infrastructure.parsers.registry import registro_padrao
+from sistemacampero.infrastructure.parsers.shapefile import ler_linhas, ler_perimetro
 from sistemacampero.infrastructure.persistence.alertas import PostgresRepositorioAlertas
 from sistemacampero.infrastructure.persistence.cadastro import PostgresRepositorioCadastro
 from sistemacampero.infrastructure.persistence.contatos import PostgresAceites, PostgresContatos
 from sistemacampero.infrastructure.persistence.db import Database
 from sistemacampero.infrastructure.persistence.equipe import PostgresRepositorioEquipe
 from sistemacampero.infrastructure.persistence.exportacao import PostgresExportacoes
+from sistemacampero.infrastructure.persistence.fechamento import PostgresFechamento
 from sistemacampero.infrastructure.persistence.ingestao import (
     PostgresFilaDeJobs,
     PostgresRepositorioIngestao,
 )
 from sistemacampero.infrastructure.persistence.kpis import PostgresConsultasKpi, somas
+from sistemacampero.infrastructure.persistence.manutencao import PostgresManutencao
 from sistemacampero.infrastructure.persistence.organizacoes import (
     PostgresRepositorioOrganizacoes,
 )
 from sistemacampero.infrastructure.persistence.resultados import PostgresRepositorioResultados
+from sistemacampero.infrastructure.persistence.resumo_semanal import PostgresResumoSemanal
+from sistemacampero.infrastructure.persistence.titular import PostgresTitular, RegistrosDeAcesso
+from sistemacampero.infrastructure.persistence.usuarios import EspelhoDeUsuarios
 from sistemacampero.infrastructure.security.jwt import (
     CacheJwks,
     VerificadorJwtSupabase,
@@ -83,8 +93,14 @@ class Container:
     repo_exportacao: PostgresExportacoes | None = None
     contatos: PostgresContatos | None = None
     aceites: PostgresAceites | None = None
+    titular: ServicoTitular | None = None
+    acessos: RegistrosDeAcesso | None = None
     exportacao: ServicoExportacao | None = None
     db: Database | None = None
+    fechamento: ServicoFechamento | None = None
+    manutencao: ServicoManutencao | None = None
+    resumo_semanal: ServicoResumoSemanal | None = None
+    espelho_usuarios: EspelhoDeUsuarios | None = None
 
     def fechar(self) -> None:
         if self.db is not None:
@@ -154,9 +170,13 @@ def construir(settings: Settings, storage: Armazenamento | None = None) -> Conta
         cadastro=cadastro,
         leitor_cadastro=ler_cadastro_gen4,
         alertas=servico_alertas,
+        leitor_contorno=ler_perimetro,
+        leitor_linhas=ler_linhas,
     )
     exportacao = ServicoExportacao(repo_exportacao, repo_ingestao, storage, regras.versao)
     executor.registrar(TipoJob.EXPORTAR, exportacao.executar)
+    kpis = ServicoKpis(consultas, somas, regras.versao)
+    manutencao = ServicoManutencao(PostgresManutencao(db))
     return Container(
         settings=settings,
         tenancy=ServicoTenancy(PostgresRepositorioOrganizacoes(db)),
@@ -169,7 +189,7 @@ def construir(settings: Settings, storage: Armazenamento | None = None) -> Conta
         cadastro=cadastro,
         servico_cadastro=ServicoCadastro(cadastro, repo_ingestao),
         consultas_kpi=consultas,
-        kpis=ServicoKpis(consultas, somas, regras.versao),
+        kpis=kpis,
         repo_alertas=repo_alertas,
         alertas=servico_alertas,
         notificacoes=ServicoNotificacoes(repo_alertas, notificador),
@@ -180,6 +200,18 @@ def construir(settings: Settings, storage: Armazenamento | None = None) -> Conta
         exportacao=exportacao,
         contatos=PostgresContatos(db),
         aceites=PostgresAceites(db),
+        titular=ServicoTitular(PostgresTitular(db), storage, settings.carencia_exclusao_dias),
+        acessos=RegistrosDeAcesso(db),
         equipe=ServicoEquipe(repo_equipe, notificador.convite if smtp else None),
         db=db,
+        fechamento=ServicoFechamento(PostgresFechamento(db), regras.versao),
+        manutencao=manutencao,
+        resumo_semanal=ServicoResumoSemanal(
+            PostgresResumoSemanal(db),
+            kpis,
+            manutencao,
+            notificador,
+            str(settings.frontend_url) if settings.frontend_url else None,
+        ),
+        espelho_usuarios=EspelhoDeUsuarios(db) if settings.hospedagem == "casa" else None,
     )

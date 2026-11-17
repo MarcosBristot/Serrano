@@ -27,8 +27,8 @@ export default function Sessoes() {
   return (
     <>
       <Cabecalho
-        titulo="Operações"
-        sub="Cada arquivo do monitor vira uma operação (sessão de trabalho)."
+        titulo="Arquivos do monitor"
+        sub="Cada arquivo .jdl gravado pelo monitor. As operações (jornadas) juntam esses arquivos."
         acoes={
           <>
             <SeletorPeriodo />
