@@ -17,11 +17,32 @@ from shapely.geometry import MultiPolygon
 from sistemacampero.domain.cadastro import ImportacaoCadastro, OrigemContorno, ResumoImportacao
 from sistemacampero.domain.errors import Conflito, NaoEncontrado
 from sistemacampero.domain.services.geo import Contorno
+from sistemacampero.domain.services.nomes import chave_talhao, mesmo_talhao
 from sistemacampero.infrastructure.parsers.shapefile import nome_normalizado
 from sistemacampero.infrastructure.persistence.db import Conexao, Database
 
 _GEOM = "extensions.st_multi(extensions.st_geomfromwkb(%s, 4326))"
 _GEOJSON = "extensions.st_asgeojson(geometria, 7)::json"
+
+# Talhões ativos com o que decide qual é o principal num grupo de nomes iguais.
+TALHOES_ATIVOS = (
+    "select t.id, t.nome, t.geometria is not null as tem_contorno, t.criado_em,"
+    " (select count(*) from public.sessoes_trabalho s"
+    "   where s.talhao_id = t.id or s.talhao_monitor_id = t.id) as sessoes"
+    " from public.talhoes t where t.organizacao_id = %s and t.ativo and t.agrupado_em is null"
+)
+
+
+def _prioridade(t: dict[str, Any]) -> tuple[bool, int, Any]:
+    return (not t["tem_contorno"], -int(t["sessoes"]), t["criado_em"])
+
+
+def achar_talhao(talhoes: list[dict[str, Any]], nome: str) -> dict[str, Any] | None:
+    """O talhão ativo que é a mesma lavoura (com contorno e mais usado primeiro)."""
+    chave = chave_talhao(nome)
+    candidatos = [t for t in talhoes if mesmo_talhao(chave, chave_talhao(str(t["nome"])))]
+    return min(candidatos, key=_prioridade) if candidatos else None
+
 
 # Colunas editáveis por entidade (o resto é do sistema).
 EDITAVEIS: dict[str, tuple[str, ...]] = {
@@ -218,17 +239,10 @@ class PostgresRepositorioCadastro:
         """
         novos = criados = preservados = 0
         with self._db.transacao(org) as conn:
-            existentes = {
-                nome_normalizado(str(t["nome"])): t
-                for t in conn.execute(
-                    "select id, nome, geometria is not null as tem_contorno"
-                    " from public.talhoes where organizacao_id = %s order by criado_em",
-                    (org,),
-                ).fetchall()
-            }
+            ativos = conn.execute(TALHOES_ATIVOS, (org,)).fetchall()
             for nome, geom in itens:
                 chave = nome_normalizado(nome)
-                t = existentes.get(chave)
+                t = achar_talhao(ativos, nome)
                 if t is None:
                     conn.execute(
                         "insert into public.talhoes"
@@ -252,6 +266,117 @@ class PostgresRepositorioCadastro:
             "talhoes_criados": criados,
             "preservados": preservados,
         }
+
+    def importar_linhas(self, org: UUID, itens: list[tuple[str, list[dict[str, Any]]]]) -> int:
+        """Cabeceira e linhas-guia do OMNI por talhão (casado pelo nome normalizado).
+
+        Reimportar substitui as linhas do OMNI daquele talhão; talhão desconhecido é ignorado
+        (o perímetro, quando existe, já o criou antes nesta mesma importação).
+        """
+        gravadas = 0
+        with self._db.transacao(org) as conn:
+            ativos = conn.execute(TALHOES_ATIVOS, (org,)).fetchall()
+            for nome, linhas in itens:
+                achado = achar_talhao(ativos, nome)
+                if achado is None:
+                    continue
+                talhao = achado["id"]
+                conn.execute(
+                    "delete from public.linhas_talhao where talhao_id = %s and origem = 'omni'",
+                    (talhao,),
+                )
+                for x in linhas:
+                    conn.execute(
+                        "insert into public.linhas_talhao (organizacao_id, talhao_id, tipo,"
+                        " subtipo, gravado_em, geometria)"
+                        " values (%s, %s, %s, %s, %s, extensions.st_geomfromwkb(%s, 4326))",
+                        (org, talhao, x["tipo"], x["subtipo"], x["gravado_em"], x["geom"].wkb),
+                    )
+                    gravadas += 1
+        return gravadas
+
+    def agrupar_talhoes(self, org: UUID) -> tuple[dict[str, int], list[UUID]]:
+        """Junta os talhões que são a mesma lavoura com outro nome ("Mae_Aveia22" = "Mãe").
+
+        O principal é o que tem contorno, depois o mais usado. Os outros ficam inativos e
+        apontam para ele (nada é apagado); a correção manual do gestor passa para o principal
+        e as demais sessões voltam para a fila para serem refeitas. Devolve o resumo e os
+        arquivos a reprocessar.
+        """
+        with self._db.transacao(org) as conn:
+            ativos = sorted(conn.execute(TALHOES_ATIVOS, (org,)).fetchall(), key=_prioridade)
+            grupos: list[list[dict[str, Any]]] = []
+            for t in ativos:
+                chave = chave_talhao(str(t["nome"]))
+                grupo = next(
+                    (g for g in grupos if mesmo_talhao(chave, chave_talhao(str(g[0]["nome"])))),
+                    None,
+                )
+                if grupo is None:
+                    grupos.append([t])
+                else:
+                    grupo.append(t)
+            repetidos: list[UUID] = []
+            for principal, *outros in (g for g in grupos if len(g) > 1):
+                ids = [o["id"] for o in outros]
+                repetidos += ids
+                conn.execute(
+                    "update public.talhoes set ativo = false, agrupado_em = %s where id = any(%s)",
+                    (principal["id"], ids),
+                )
+                conn.execute(
+                    "update public.talhoes set agrupado_em = %s where agrupado_em = any(%s)",
+                    (principal["id"], ids),
+                )
+                conn.execute(
+                    "update public.sessoes_trabalho set talhao_id = %s"
+                    " where talhao_origem = 'manual' and talhao_id = any(%s)",
+                    (principal["id"], ids),
+                )
+                tem_linhas = conn.execute(
+                    "select 1 from public.linhas_talhao where talhao_id = %s limit 1",
+                    (principal["id"],),
+                ).fetchone()
+                if tem_linhas is None:
+                    conn.execute(
+                        "update public.linhas_talhao set talhao_id = %s where talhao_id = any(%s)",
+                        (principal["id"], ids),
+                    )
+            arquivos = [
+                r["arquivo_bruto_id"]
+                for r in conn.execute(
+                    "select distinct arquivo_bruto_id from public.sessoes_trabalho"
+                    " where talhao_origem <> 'manual'"
+                    "   and (talhao_id = any(%s) or talhao_monitor_id = any(%s))",
+                    (repetidos, repetidos),
+                ).fetchall()
+            ]
+        resumo = {
+            "grupos": sum(1 for g in grupos if len(g) > 1),
+            "talhoes_agrupados": len(repetidos),
+            "talhoes_ativos": len(grupos),
+        }
+        return resumo, arquivos
+
+    def linhas_geojson(self, org: UUID, talhao_id: UUID | None = None) -> dict[str, Any]:
+        """Camada do mapa: cabeceiras e linhas-guia dos talhões ativos."""
+        with self._db.transacao(org) as conn:
+            linha = conn.execute(
+                """
+                select coalesce(json_agg(json_build_object(
+                    'type', 'Feature',
+                    'geometry', extensions.st_asgeojson(l.geometria, 7)::json,
+                    'properties', json_build_object('tipo', l.tipo, 'subtipo', l.subtipo,
+                        'talhao', t.nome, 'gravado_em', l.gravado_em)
+                ) order by l.tipo, l.gravado_em), '[]'::json) as features
+                from public.linhas_talhao l
+                join public.talhoes t on t.id = l.talhao_id and t.ativo
+                where l.organizacao_id = %s and (%s::uuid is null or l.talhao_id = %s)
+                """,
+                (org, talhao_id, talhao_id),
+            ).fetchone()
+        assert linha is not None
+        return {"type": "FeatureCollection", "features": linha["features"]}
 
     @staticmethod
     def _upsert(conn: Conexao, tabela: str, org: UUID, guid: str, campos: dict[str, Any]) -> UUID:
@@ -391,12 +516,18 @@ class PostgresRepositorioCadastro:
                     " where s.talhao_origem <> 'manual' and ms.cobertura_gps > 0"
                 ).fetchall()
             else:
+                # Caixa do contorno primeiro (barato, pelos índices da sessão); o ponto exato só
+                # para quem cai dentro dela.
+                x0, y0, x1, y1 = contorno.bounds
                 linhas = conn.execute(
                     "select s.arquivo_bruto_id from public.sessoes_trabalho s"
                     " where s.talhao_origem <> 'manual' and (s.talhao_id = %s or exists ("
                     "   select 1 from public.telemetria t where t.sessao_id = s.id"
-                    f"   and extensions.st_intersects(t.geom, ({_GEOM})::extensions.geography)))",
-                    (talhao_id, _wkb(contorno)),
+                    "   and t.lon between %s and %s and t.lat between %s and %s"
+                    "   and extensions.st_intersects("
+                    "     extensions.st_setsrid(extensions.st_makepoint(t.lon, t.lat), 4326),"
+                    f"     {_GEOM})))",
+                    (talhao_id, x0, x1, y0, y1, _wkb(contorno)),
                 ).fetchall()
         return [linha["arquivo_bruto_id"] for linha in linhas]
 

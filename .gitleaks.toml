@@ -1,0 +1,7 @@
+# Regras padrão do gitleaks; os modelos de .env só têm nomes de variáveis, sem valores.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "modelos de configuração sem segredos"
+paths = ['''(^|/)\.env(\.[a-z]+)?\.example$''']

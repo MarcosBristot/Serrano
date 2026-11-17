@@ -8,10 +8,16 @@ import BoasVindas from "./paginas/BoasVindas";
 import Configuracoes from "./paginas/Configuracoes";
 import Convite from "./paginas/Convite";
 import Enviar from "./paginas/Enviar";
+import Inicio from "./paginas/Inicio";
+import JornadaDetalhe from "./paginas/JornadaDetalhe";
+import Jornadas from "./paginas/Jornadas";
 import Login from "./paginas/Login";
+import MaquinaDetalhe from "./paginas/MaquinaDetalhe";
+import Maquinas from "./paginas/Maquinas";
 import MapaPagina from "./paginas/MapaPagina";
 import Painel from "./paginas/Painel";
 import SessaoDetalhe from "./paginas/SessaoDetalhe";
+import Safras from "./paginas/Safras";
 import Sessoes from "./paginas/Sessoes";
 import Talhoes from "./paginas/Talhoes";
 
@@ -27,7 +33,13 @@ export default function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route index element={<Painel />} />
+        <Route index element={<Inicio />} />
+        <Route path="safras" element={<Safras />} />
+        <Route path="maquinas" element={<Maquinas />} />
+        <Route path="maquinas/:id" element={<MaquinaDetalhe />} />
+        <Route path="analise" element={<Painel />} />
+        <Route path="jornadas" element={<Jornadas />} />
+        <Route path="jornadas/:id" element={<JornadaDetalhe />} />
         <Route path="mapa" element={<MapaPagina />} />
         <Route path="sessoes" element={<Sessoes />} />
         <Route path="sessoes/:id" element={<SessaoDetalhe />} />

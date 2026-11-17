@@ -1,0 +1,10 @@
+// Cloudflare Workers (assets estáticos): publica o build do Vite (dist), não o código-fonte.
+// Rotas do React Router (/maquinas/123 etc.) caem no index.html.
+{
+  "name": "serrano",
+  "compatibility_date": "2025-10-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}

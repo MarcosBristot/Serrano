@@ -238,3 +238,6 @@ configurar_supabase.sql
 
 # token de desenvolvimento da pilha local (scripts/conta_local.py)
 .token_local
+!.env.casa.example
+# backups da produção em casa
+backups/

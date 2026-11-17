@@ -1,6 +1,6 @@
 """Consultas de KPIs, métricas diárias, mapas e rotas legadas.
 
-``metricas_diarias`` é recalculada a partir da telemetria (1 Hz) por dia LOCAL (fuso da
+``metricas_diarias`` é recalculada a partir da telemetria (janelas com ``peso_s``) por dia LOCAL (fuso da
 organização), máquina, talhão de CADA PONTO e operação. Assim uma sessão que atravessa
 meia-noite ou dois talhões é repartida corretamente. A área da sessão (cobertura, ou
 estimada sem GPS) é repartida pela distância trabalhada em cada parte.
@@ -97,15 +97,15 @@ def recalcular_diarias(
                     else t.talhao_id
                 end as talhao_id,
                 s.operacao, t.sessao_id,
-                count(*) filter (where t.engine_on) as motor_s,
-                count(*) filter (where t.engine_on and t.speed_kmh >= 1) as trabalho_s,
-                count(*) filter (where t.engine_on and t.speed_kmh < 1) as ocioso_s,
-                coalesce(sum(t.fuel_rate_lph) filter (where t.engine_on), 0) / 3600 as litros,
-                coalesce(sum(t.fuel_rate_lph) filter (where t.engine_on and t.speed_kmh >= 1), 0)
+                coalesce(sum(t.peso_s) filter (where t.engine_on), 0) as motor_s,
+                coalesce(sum(t.peso_s) filter (where t.engine_on and t.speed_kmh >= 1), 0) as trabalho_s,
+                coalesce(sum(t.peso_s) filter (where t.engine_on and t.speed_kmh < 1), 0) as ocioso_s,
+                coalesce(sum(t.fuel_rate_lph * t.peso_s) filter (where t.engine_on), 0) / 3600 as litros,
+                coalesce(sum(t.fuel_rate_lph * t.peso_s) filter (where t.engine_on and t.speed_kmh >= 1), 0)
                     / 3600 as litros_trabalho,
-                coalesce(sum(t.fuel_rate_lph) filter (where t.engine_on and t.speed_kmh < 1), 0)
+                coalesce(sum(t.fuel_rate_lph * t.peso_s) filter (where t.engine_on and t.speed_kmh < 1), 0)
                     / 3600 as litros_ocioso,
-                coalesce(sum(t.speed_kmh) filter (where t.engine_on and t.speed_kmh >= 1), 0)
+                coalesce(sum(t.speed_kmh * t.peso_s) filter (where t.engine_on and t.speed_kmh >= 1), 0)
                     / 3600 as distancia_km
             from public.telemetria t
             join public.sessoes_trabalho s on s.id = t.sessao_id
@@ -131,6 +131,122 @@ def recalcular_diarias(
         from partes group by dia, talhao_id, operacao
         """,
         {"fuso": fuso, "maq": maquina_id, "d0": d0, "d1": d1, "org": org, "versao": versao},
+    ).rowcount
+
+
+# Jornada "curta": menos de 3 min de motor e nenhuma área (liga/desliga, teste do monitor).
+_CURTA = "j.motor_h < 0.05 and j.area_ha < 0.01"
+
+# Arquivos da mesma máquina separados por menos que isto formam uma jornada.
+INTERVALO_JORNADA = "15 minutes"
+
+
+def recalcular_jornadas(
+    conn: Conexao, org: UUID, maquina_id: UUID, inicio: datetime, fim: datetime, versao: str
+) -> int:
+    """Refaz as jornadas da máquina em volta de [inicio, fim].
+
+    Apaga as jornadas que encostam na janela (com folga do intervalo), alarga a janela até as
+    bordas delas e reagrupa os arquivos ali dentro ("ilhas" de sessões com folga menor que
+    ``INTERVALO_JORNADA``, considerando arquivos sobrepostos). As somas vêm da telemetria,
+    como as diárias, para não contar duas vezes arquivos gravados em paralelo.
+    """
+    borda = conn.execute(
+        "with apagadas as (delete from public.jornadas where maquina_id = %(maq)s"
+        "   and versao_regras = %(versao)s"
+        "   and fim >= %(a)s::timestamptz - %(gap)s::interval"
+        "   and inicio <= %(b)s::timestamptz + %(gap)s::interval returning inicio, fim)"
+        " select least(min(inicio), %(a)s::timestamptz) as a,"
+        "        greatest(max(fim), %(b)s::timestamptz) as b from apagadas",
+        {"maq": maquina_id, "versao": versao, "a": inicio, "b": fim, "gap": INTERVALO_JORNADA},
+    ).fetchone()
+    assert borda is not None
+    return conn.execute(
+        """
+        with s as (
+            select s.id, s.inicio, s.fim, s.operacao from public.sessoes_trabalho s
+            where s.maquina_id = %(maq)s
+              and s.fim >= %(a)s::timestamptz - %(gap)s::interval
+              and s.inicio <= %(b)s::timestamptz + %(gap)s::interval
+        ), o as (
+            select *, max(fim) over (order by inicio, id
+                rows between unbounded preceding and 1 preceding) as fim_ant
+            from s
+        ), g as (
+            select *, sum(case when fim_ant is null or inicio > fim_ant + %(gap)s::interval
+                then 1 else 0 end) over (order by inicio, id) as grupo
+            from o
+        ), j as (
+            select grupo, min(inicio) as inicio, max(fim) as fim, count(*) as arquivos,
+                mode() within group (order by operacao) as operacao
+            from g group by grupo
+        ), pts as (
+            select j.grupo, t.sessao_id,
+                case ss.talhao_origem
+                    when 'manual' then ss.talhao_id
+                    when 'monitor' then coalesce(t.talhao_id, ss.talhao_id)
+                    else t.talhao_id
+                end as talhao_id,
+                coalesce(sum(t.peso_s) filter (where t.engine_on), 0) as motor_s,
+                coalesce(sum(t.peso_s) filter (where t.engine_on and t.speed_kmh >= 1), 0)
+                    as trabalho_s,
+                coalesce(sum(t.peso_s) filter (where t.engine_on and t.speed_kmh < 1), 0)
+                    as ocioso_s,
+                coalesce(sum(t.fuel_rate_lph * t.peso_s) filter (where t.engine_on), 0) / 3600
+                    as litros,
+                coalesce(sum(t.fuel_rate_lph * t.peso_s)
+                    filter (where t.engine_on and t.speed_kmh >= 1), 0) / 3600 as litros_trabalho,
+                coalesce(sum(t.fuel_rate_lph * t.peso_s)
+                    filter (where t.engine_on and t.speed_kmh < 1), 0) / 3600 as litros_ocioso,
+                coalesce(sum(t.speed_kmh * t.peso_s)
+                    filter (where t.engine_on and t.speed_kmh >= 1), 0) / 3600 as distancia_km
+            from j
+            join public.telemetria t on t.maquina_id = %(maq)s
+                and t.ts >= j.inicio and t.ts <= j.fim
+                -- limites constantes: o planejador só poda as partições mensais com eles
+                and t.ts >= %(a)s::timestamptz - %(gap)s::interval
+                and t.ts <= %(b)s::timestamptz + %(gap)s::interval
+            join public.sessoes_trabalho ss on ss.id = t.sessao_id
+            group by 1, 2, 3
+        ), partes as (
+            select p.*,
+                coalesce(ms.area_cobertura_ha, ms.area_estimada_ha, 0)
+                  * case when ms.distancia_trabalho_km > 0
+                         then least(p.distancia_km / ms.distancia_trabalho_km, 1) else 0 end
+                  as area_ha
+            from pts p
+            left join public.metricas_sessao ms on ms.sessao_id = p.sessao_id and ms.vigente
+        ), somas as (
+            select grupo, sum(motor_s) / 3600.0 as motor_h, sum(trabalho_s) / 3600.0 as trabalho_h,
+                sum(ocioso_s) / 3600.0 as ocioso_h, sum(litros) as litros,
+                sum(litros_trabalho) as litros_trabalho, sum(litros_ocioso) as litros_ocioso,
+                sum(area_ha) as area_ha, sum(distancia_km) as distancia_km,
+                count(distinct talhao_id) as talhoes
+            from partes group by grupo
+        ), principal as (
+            select distinct on (grupo) grupo, talhao_id from (
+                select grupo, talhao_id, sum(trabalho_s) as trab, sum(motor_s) as mot
+                from partes where talhao_id is not null group by 1, 2
+            ) x order by grupo, trab desc, mot desc
+        )
+        insert into public.jornadas (organizacao_id, maquina_id, versao_regras, inicio, fim,
+            talhao_id, talhoes, operacao, arquivos, motor_h, trabalho_h, ocioso_h, litros,
+            litros_trabalho, litros_ocioso, area_ha, distancia_km)
+        select %(org)s, %(maq)s, %(versao)s, j.inicio, j.fim, p.talhao_id,
+            coalesce(x.talhoes, 0), j.operacao, j.arquivos,
+            coalesce(x.motor_h, 0), coalesce(x.trabalho_h, 0), coalesce(x.ocioso_h, 0),
+            coalesce(x.litros, 0), coalesce(x.litros_trabalho, 0), coalesce(x.litros_ocioso, 0),
+            coalesce(x.area_ha, 0), coalesce(x.distancia_km, 0)
+        from j left join somas x using (grupo) left join principal p using (grupo)
+        """,
+        {
+            "maq": maquina_id,
+            "versao": versao,
+            "org": org,
+            "a": borda["a"],
+            "b": borda["b"],
+            "gap": INTERVALO_JORNADA,
+        },
     ).rowcount
 
 
@@ -199,18 +315,18 @@ class PostgresConsultasKpi:
             return conn.execute(
                 f"""
                 select date_trunc('hour', t.ts at time zone o.fuso) as periodo,
-                    count(*) filter (where t.engine_on) / 3600.0 as motor_h,
-                    count(*) filter (where t.engine_on and t.speed_kmh >= 1) / 3600.0 as trabalho_h,
-                    count(*) filter (where t.engine_on and t.speed_kmh < 1) / 3600.0 as ocioso_h,
-                    coalesce(sum(t.fuel_rate_lph) filter (where t.engine_on), 0) / 3600 as litros,
-                    coalesce(sum(t.fuel_rate_lph)
+                    coalesce(sum(t.peso_s) filter (where t.engine_on), 0) / 3600.0 as motor_h,
+                    coalesce(sum(t.peso_s) filter (where t.engine_on and t.speed_kmh >= 1), 0) / 3600.0 as trabalho_h,
+                    coalesce(sum(t.peso_s) filter (where t.engine_on and t.speed_kmh < 1), 0) / 3600.0 as ocioso_h,
+                    coalesce(sum(t.fuel_rate_lph * t.peso_s) filter (where t.engine_on), 0) / 3600 as litros,
+                    coalesce(sum(t.fuel_rate_lph * t.peso_s)
                         filter (where t.engine_on and t.speed_kmh >= 1), 0)
                         / 3600 as litros_trabalho,
-                    coalesce(sum(t.fuel_rate_lph)
+                    coalesce(sum(t.fuel_rate_lph * t.peso_s)
                         filter (where t.engine_on and t.speed_kmh < 1), 0) / 3600 as litros_ocioso,
-                    coalesce(sum(t.speed_kmh / 3.6 * i.largura_m)
+                    coalesce(sum(t.speed_kmh / 3.6 * i.largura_m * t.peso_s)
                         filter (where t.engine_on and t.speed_kmh >= 1), 0) / 10000 as area_ha,
-                    coalesce(sum(t.speed_kmh) filter (where t.engine_on and t.speed_kmh >= 1), 0)
+                    coalesce(sum(t.speed_kmh * t.peso_s) filter (where t.engine_on and t.speed_kmh >= 1), 0)
                         / 3600 as distancia_km,
                     null::float as custo_rs, 0 as dias_sem_preco
                 from public.telemetria t
@@ -263,7 +379,7 @@ class PostgresConsultasKpi:
     def pontos_mapa(self, org: UUID, f: dict[str, Any], celula_m: float) -> pd.DataFrame:
         """Pré-agrega no banco em células de ``celula_m`` (bem menores que o hexágono):
         254 mil pontos viram poucos milhares de linhas, com litros e área já somados."""
-        where, params = ["t.geom is not null", "t.engine_on", "t.speed_kmh >= 1"], []
+        where, params = ["t.lat is not null", "t.engine_on", "t.speed_kmh >= 1"], []
         for coluna, alias in (("maquina_id", "t"), ("talhao_id", "t"), ("operacao", "s")):
             if f.get(coluna) is not None:
                 where.append(f"{alias}.{coluna} = %s")
@@ -272,8 +388,8 @@ class PostgresConsultasKpi:
         with self._db.transacao(org) as conn:
             linhas = conn.execute(
                 "select avg(t.lat) as lat, avg(t.lon) as lon,"
-                " sum(t.fuel_rate_lph) / 3600 as litros,"
-                " sum(t.speed_kmh / 3.6 * i.largura_m) / 10000 as area_ha"
+                " sum(t.fuel_rate_lph * t.peso_s) / 3600 as litros,"
+                " sum(t.speed_kmh / 3.6 * i.largura_m * t.peso_s) / 10000 as area_ha"
                 " from public.telemetria t"
                 " join public.sessoes_trabalho s on s.id = t.sessao_id"
                 " join public.organizacoes o on o.id = t.organizacao_id"
@@ -286,6 +402,174 @@ class PostgresConsultasKpi:
             ).fetchall()
         return pd.DataFrame(linhas, columns=["lat", "lon", "litros", "area_ha"], dtype=float)
 
+    # ------------------------------------------------------------- jornadas
+    def jornadas(
+        self,
+        org: UUID,
+        f: dict[str, Any],
+        versao: str,
+        limite: int,
+        cursor: tuple[str, UUID] | None,
+        curtas: bool,
+    ) -> list[dict[str, Any]]:
+        where: list[str] = ["j.versao_regras = %s"]
+        params: list[Any] = [versao]
+        if f.get("id"):
+            where.append("j.id = %s")
+            params.append(f["id"])
+        if f.get("maquina_id"):
+            where.append("j.maquina_id = %s")
+            params.append(f["maquina_id"])
+        if f.get("talhao_id"):
+            where.append("j.talhao_id = %s")
+            params.append(f["talhao_id"])
+        if f.get("inicio"):
+            where.append("(j.inicio at time zone o.fuso)::date >= %s")
+            params.append(f["inicio"])
+        if f.get("fim"):
+            where.append("(j.inicio at time zone o.fuso)::date <= %s")
+            params.append(f["fim"])
+        if not curtas:
+            where.append(f"not ({_CURTA})")
+        if cursor:
+            where.append("(j.inicio, j.id) < (%s::timestamptz, %s)")
+            params.extend(cursor)
+        with self._db.transacao(org) as conn:
+            return conn.execute(
+                "select j.id, j.maquina_id, m.serial, m.apelido, j.inicio, j.fim, j.talhao_id,"
+                " t.nome as talhao_nome, j.talhoes, j.operacao, j.arquivos, j.motor_h,"
+                " j.trabalho_h, j.ocioso_h, j.litros, j.litros_trabalho, j.litros_ocioso,"
+                " j.area_ha, j.distancia_km, p.preco_rs_l::float as preco_rs_l,"
+                f" ({_CURTA}) as curta"
+                " from public.jornadas j"
+                " join public.organizacoes o on o.id = j.organizacao_id"
+                " join public.maquinas m on m.id = j.maquina_id"
+                " left join public.talhoes t on t.id = j.talhao_id"
+                " left join lateral (select pc.preco_rs_l from public.preco_combustivel pc"
+                "   where pc.tipo = 'S10' and pc.valido_de <= (j.inicio at time zone o.fuso)::date"
+                "     and (pc.valido_ate is null"
+                "          or pc.valido_ate > (j.inicio at time zone o.fuso)::date)"
+                "   order by pc.valido_de desc limit 1) p on true"
+                f" where {' and '.join(where)} order by j.inicio desc, j.id desc limit %s",
+                (*params, limite),
+            ).fetchall()
+
+    def visao_maquinas(self, org: UUID, f: dict[str, Any], versao: str) -> list[dict[str, Any]]:
+        """Uma linha por máquina com uso real: tipo pelo que ela faz e somas das jornadas.
+
+        Registros de segundos (liga/desliga) não entram; máquina sem nenhuma hora de motor
+        na vida (ex.: o serial do monitor quando o arquivo não traz o da máquina) não aparece.
+        """
+        periodo = ["not (" + _CURTA + ")"]
+        params: list[Any] = []
+        if f.get("inicio"):
+            periodo.append("(j.inicio at time zone o.fuso)::date >= %s")
+            params.append(f["inicio"])
+        if f.get("fim"):
+            periodo.append("(j.inicio at time zone o.fuso)::date <= %s")
+            params.append(f["fim"])
+        filtro = " and ".join(periodo)
+        with self._db.transacao(org) as conn:
+            return conn.execute(
+                f"""
+                with vida as (
+                    select j.maquina_id, sum(j.motor_h) as motor_h,
+                        bool_or(j.operacao = 'colheita') as colhe,
+                        bool_or(j.operacao like 'pulveriz%%') as pulveriza
+                    from public.jornadas j where j.versao_regras = %s group by 1
+                ), periodo as (
+                    select j.maquina_id, count(*) as jornadas, sum(j.motor_h) as motor_h,
+                        sum(j.trabalho_h) as trabalho_h, sum(j.ocioso_h) as ocioso_h,
+                        sum(j.litros) as litros, sum(j.litros_ocioso) as litros_ocioso,
+                        sum(j.area_ha) as area_ha, sum(j.distancia_km) as distancia_km,
+                        sum(j.litros * p.preco_rs_l)::float as custo_rs,
+                        sum(j.litros_ocioso * p.preco_rs_l)::float as custo_ocioso_rs,
+                        count(distinct j.talhao_id) as talhoes
+                    from public.jornadas j
+                    join public.organizacoes o on o.id = j.organizacao_id
+                    left join lateral (select pc.preco_rs_l from public.preco_combustivel pc
+                        where pc.tipo = 'S10'
+                          and pc.valido_de <= (j.inicio at time zone o.fuso)::date
+                          and (pc.valido_ate is null
+                               or pc.valido_ate > (j.inicio at time zone o.fuso)::date)
+                        order by pc.valido_de desc limit 1) p on true
+                    where j.versao_regras = %s and {filtro}
+                    group by 1
+                ), colheita as (
+                    -- massa seca (umidade de comercialização), a que o produtor vende
+                    select s.maquina_id, sum(c.massa_seca_kg) as massa_kg
+                    from public.colheitas c
+                    join public.sessoes_trabalho s on s.id = c.sessao_id
+                    join public.organizacoes o on o.id = s.organizacao_id
+                    where true
+                      and (%s::date is null or (s.inicio at time zone o.fuso)::date >= %s)
+                      and (%s::date is null or (s.inicio at time zone o.fuso)::date <= %s)
+                    group by 1
+                )
+                select m.id, m.serial, m.apelido, m.modelo, m.fabricante,
+                    case when v.colhe then 'colheitadeira' when v.pulveriza then 'pulverizador'
+                         else 'trator' end as tipo,
+                    m.ultima_atividade, coalesce(p.jornadas, 0) as jornadas,
+                    coalesce(p.motor_h, 0) as motor_h, coalesce(p.trabalho_h, 0) as trabalho_h,
+                    coalesce(p.ocioso_h, 0) as ocioso_h, coalesce(p.litros, 0) as litros,
+                    coalesce(p.litros_ocioso, 0) as litros_ocioso,
+                    coalesce(p.area_ha, 0) as area_ha,
+                    coalesce(p.distancia_km, 0) as distancia_km, p.custo_rs, p.custo_ocioso_rs,
+                    coalesce(p.talhoes, 0) as talhoes, c.massa_kg, u.talhao_nome as ultimo_talhao
+                from public.maquinas m
+                join vida v on v.maquina_id = m.id and v.motor_h >= 0.1
+                left join periodo p on p.maquina_id = m.id
+                left join colheita c on c.maquina_id = m.id
+                left join lateral (select t.nome as talhao_nome from public.jornadas j
+                    left join public.talhoes t on t.id = j.talhao_id
+                    where j.maquina_id = m.id and j.versao_regras = %s
+                      and not ({_CURTA}) order by j.inicio desc limit 1) u on true
+                where m.ativa and (%s::uuid is null or m.id = %s)
+                order by coalesce(p.motor_h, 0) desc, m.ultima_atividade desc nulls last
+                """,
+                (
+                    versao,
+                    versao,
+                    *params,
+                    f.get("inicio"),
+                    f.get("inicio"),
+                    f.get("fim"),
+                    f.get("fim"),
+                    versao,
+                    f.get("maquina_id"),
+                    f.get("maquina_id"),
+                ),
+            ).fetchall()
+
+    def arquivos_da_jornada(self, org: UUID, jornada_id: UUID) -> list[dict[str, Any]]:
+        with self._db.transacao(org) as conn:
+            return conn.execute(
+                "select s.id, s.inicio, s.fim, s.n_amostras, s.qualidade_score, ms.motor_h,"
+                " ms.litros_integral from public.jornadas j"
+                " join public.sessoes_trabalho s on s.maquina_id = j.maquina_id"
+                "  and s.inicio >= j.inicio and s.fim <= j.fim"
+                " left join public.metricas_sessao ms on ms.sessao_id = s.id and ms.vigente"
+                " where j.id = %s order by s.inicio",
+                (jornada_id,),
+            ).fetchall()
+
+    def pontos_jornada(self, org: UUID, jornada_id: UUID) -> pd.DataFrame | None:
+        with self._db.transacao(org) as conn:
+            j = conn.execute(
+                "select maquina_id, inicio, fim from public.jornadas where id = %s", (jornada_id,)
+            ).fetchone()
+            if j is None:
+                return None
+            linhas = conn.execute(
+                "select ts, lat, lon, speed_kmh, engine_on, peso_s from public.telemetria"
+                " where maquina_id = %s and ts >= %s and ts <= %s and lat is not null"
+                " order by ts",
+                (j["maquina_id"], j["inicio"], j["fim"]),
+            ).fetchall()
+        return pd.DataFrame(
+            linhas, columns=["ts", "lat", "lon", "speed_kmh", "engine_on", "peso_s"]
+        )
+
     def pontos_sessao(self, org: UUID, sessao_id: UUID) -> pd.DataFrame | None:
         with self._db.transacao(org) as conn:
             existe = conn.execute(
@@ -294,11 +578,13 @@ class PostgresConsultasKpi:
             if existe is None:
                 return None
             linhas = conn.execute(
-                "select ts, lat, lon, speed_kmh, engine_on from public.telemetria"
-                " where sessao_id = %s and geom is not null order by ts",
+                "select ts, lat, lon, speed_kmh, engine_on, peso_s from public.telemetria"
+                " where sessao_id = %s and lat is not null order by ts",
                 (sessao_id,),
             ).fetchall()
-        return pd.DataFrame(linhas, columns=["ts", "lat", "lon", "speed_kmh", "engine_on"])
+        return pd.DataFrame(
+            linhas, columns=["ts", "lat", "lon", "speed_kmh", "engine_on", "peso_s"]
+        )
 
     # ------------------------------------------------------------- legado
     def pontos_maquina(
@@ -312,7 +598,7 @@ class PostgresConsultasKpi:
         limite: int,
         apos: datetime | None,
     ) -> list[dict[str, Any]] | None:
-        where: list[str] = ["m.serial = %s", "t.geom is not null"]
+        where: list[str] = ["m.serial = %s", "t.lat is not null"]
         params: list[Any] = [serial]
         for cond, valor in (
             ("t.talhao_id = %s", talhao_id),
@@ -323,9 +609,13 @@ class PostgresConsultasKpi:
             if valor is not None:
                 where.append(cond)
                 params.append(valor)
-        if passo_s > 1:
-            where.append("mod(extract(epoch from t.ts)::bigint, %s) = 0")
-            params.append(passo_s)
+        if passo_s > 1:  # a telemetria já vem em janelas: um ponto por janela de ``passo_s``
+            where.append(
+                "t.ts = (select min(t2.ts) from public.telemetria t2 where t2.maquina_id ="
+                " t.maquina_id and floor(extract(epoch from t2.ts) / %s)"
+                " = floor(extract(epoch from t.ts) / %s))"
+            )
+            params.extend([passo_s, passo_s])
         with self._db.transacao(org) as conn:
             if (
                 conn.execute(
