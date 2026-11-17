@@ -168,6 +168,9 @@ def main() -> int:
     configurar_logs(settings.log_level, settings.log_json)
     c = construir(settings)
     assert c.fila is not None and c.executor is not None
+    contatos = c.contatos
+    acessos = c.acessos
+    titular = c.titular
     worker = Worker(
         c.fila,
         c.executor,
@@ -178,6 +181,18 @@ def main() -> int:
         periodicas=[
             *([c.notificacoes.enviar_pendentes] if c.notificacoes else []),
             *([_a_cada(3600, c.exportacao.limpar_vencidas)] if c.exportacao else []),
+            *(
+                [_a_cada(86400, lambda: contatos.expurgar(settings.retencao_contatos_meses))]
+                if contatos
+                else []
+            ),
+            *(
+                [_a_cada(86400, lambda: acessos.expurgar(settings.retencao_acessos_meses))]
+                if acessos
+                else []
+            ),
+            *([_a_cada(3600, titular.executar_vencidas)] if titular else []),
+            *([_a_cada(900, resumo.enviar_da_semana)] if (resumo := c.resumo_semanal) else []),
         ],
     )
     parar = threading.Event()

@@ -21,6 +21,10 @@ SEGREDO = "segredo-de-teste-com-pelo-menos-32-bytes!"
 ISSUER = "https://projeto-teste.supabase.co/auth/v1"
 
 
+# Aceite obrigatório dos Termos/Política ao criar a organização.
+ACEITE = {"aceite_termos": True, "versao_documentos": "2026-10-28"}
+
+
 class RepositorioEmMemoria:
     def __init__(self) -> None:
         self.orgs: dict[UUID, Organizacao] = {}

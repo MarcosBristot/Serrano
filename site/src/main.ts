@@ -1,5 +1,6 @@
-import "./estilo.css";
+import "./base";
 
+import empresa from "../empresa.json";
 import { Cena, type Quadro } from "./cena";
 
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:8000/api/v1";
@@ -8,29 +9,35 @@ const menosMovimento = window.matchMedia("(prefers-reduced-motion: reduce)").mat
 
 // ----------------------------------------------------------------- quadros-chave por seção
 const BASE: Omit<Quadro, "dist" | "cam" | "alvo"> = {
-  elevacao: -6, azimute: 95, nevoa: 0x18202e, exposicao: 0.85, noite: 1, calor: 0, alerta: 0, trilha: 0,
+  elevacao: 20, azimute: 120, nevoa: 0xb8c2c8, exposicao: 0.55, noite: 0, calor: 0, alerta: 0, trilha: 0,
+  foco: 15, desfoque: 0.25, brilho: 0.3,
 };
 const QUADROS: Record<string, Quadro & { segura: number }> = {
-  inicio: { ...BASE, dist: 0, cam: [4.6, 2.1, -8.4], alvo: [3.4, 1.5, 0.5], segura: 0 },
+  // fim de tarde: câmera baixa no meio do trigo, sol rasante atrás da máquina
+  inicio: {
+    ...BASE, dist: 0, cam: [7.6, 1.32, -9.2], alvo: [3.1, 1.75, 2.4], elevacao: 6, azimute: 334, nevoa: 0xc98a4e,
+    exposicao: 0.5, noite: 0.08, foco: 11.6, desfoque: 0.8, brilho: 0.35, segura: 0,
+  },
   coleta: {
-    ...BASE, dist: 14, cam: [-8.5, 5.2, 9.5], alvo: [-3.8, 1.0, -2], elevacao: 9, azimute: 100, nevoa: 0xc9b29e,
-    exposicao: 0.72, noite: 0.1, trilha: 1, segura: 4,
+    ...BASE, dist: 14, cam: [-8.5, 5.2, 9.5], alvo: [-3.8, 1.0, -2], elevacao: 12, azimute: 100, nevoa: 0xd8c0a0,
+    exposicao: 0.66, trilha: 1, foco: 13.5, desfoque: 0.35, brilho: 0.45, segura: 4,
   },
   mapa: {
-    ...BASE, dist: 30, cam: [0.5, 44, 10], alvo: [0, 0, -2], elevacao: 26, azimute: 115, nevoa: 0xb3c0cc,
-    exposicao: 0.5, noite: 0, calor: 1, trilha: 0.6, segura: 1,
+    ...BASE, dist: 30, cam: [0.5, 44, 10], alvo: [0, 0, -2], elevacao: 28, azimute: 115, nevoa: 0xb3c0cc,
+    exposicao: 0.5, calor: 1, trilha: 0.6, foco: 45, desfoque: 0.18, brilho: 0.25, segura: 1,
   },
   alertas: {
-    ...BASE, dist: 35, cam: [7.5, 3.6, 2.2], alvo: [0, 1.3, 3.2], elevacao: 40, azimute: 135, nevoa: 0xbac6d0,
-    exposicao: 0.5, noite: 0, calor: 0, alerta: 1, trilha: 0.6, segura: 0,
+    ...BASE, dist: 35, cam: [7.5, 3.6, 2.2], alvo: [0, 1.3, 3.2], elevacao: 38, azimute: 135, nevoa: 0xbac6d0,
+    exposicao: 0.5, alerta: 1, trilha: 0.6, foco: 8.5, desfoque: 0.35, brilho: 0.35, segura: 0,
   },
   resultados: {
-    ...BASE, dist: 50, cam: [12, 6.5, 1], alvo: [0, 1, -5.5], elevacao: 52, azimute: 165, nevoa: 0xbfcad3,
-    exposicao: 0.48, noite: 0, trilha: 1, segura: 5,
+    ...BASE, dist: 50, cam: [12, 6.5, 1], alvo: [0, 1, -5.5], elevacao: 30, azimute: 165, nevoa: 0xc4c4bc,
+    exposicao: 0.52, trilha: 1, foco: 13.5, desfoque: 0.25, segura: 5,
   },
+  // pôr do sol à frente, faróis acesos
   contato: {
-    ...BASE, dist: 72, cam: [-3.5, 2.6, 13], alvo: [0, 1.8, -10], elevacao: 6, azimute: 200, nevoa: 0xd6a582,
-    exposicao: 0.72, noite: 0.05, trilha: 0.8, segura: 4,
+    ...BASE, dist: 72, cam: [-3.5, 2.6, 13], alvo: [0, 1.8, -10], elevacao: 2.5, azimute: 188, nevoa: 0xdc9a62,
+    exposicao: 0.8, noite: 0.25, trilha: 0.8, foco: 13, desfoque: 0.6, brilho: 0.85, segura: 4,
   },
 };
 
@@ -39,6 +46,8 @@ const secoes = [...document.querySelectorAll<HTMLElement>("[data-cena]")];
 let cena: Cena | null = null;
 try {
   cena = new Cena(canvas);
+  cena.semSuavizar = menosMovimento;
+  if (import.meta.env.DEV) Object.assign(window, { __cena: cena }); // depuração local
 } catch {
   // sem WebGL: a página continua legível sobre o fundo escuro
   canvas.remove();
@@ -116,18 +125,37 @@ requestAnimationFrame(quadro);
 
 // ----------------------------------------------------------------- topo, trilho e revelações
 const topo = document.querySelector(".topo")!;
-const pontos = [...document.querySelectorAll<HTMLElement>(".trilho li")];
+const pontos = [...document.querySelectorAll<HTMLAnchorElement>(".trilho a")];
 const marcarAtiva = () => {
   topo.classList.toggle("rolado", window.scrollY > 40);
   const meio = window.scrollY + window.innerHeight / 2;
   let ativa = secoes[0].id;
   for (const s of secoes) if (s.offsetTop <= meio) ativa = s.id;
-  pontos.forEach((p) => p.classList.toggle("ativo", p.dataset.alvo === ativa));
+  pontos.forEach((p) => {
+    p.classList.toggle("ativo", p.dataset.alvo === ativa);
+    if (p.dataset.alvo === ativa) p.setAttribute("aria-current", "true");
+    else p.removeAttribute("aria-current");
+  });
   document.body.classList.toggle("no-contato", ativa === "contato");
 };
 window.addEventListener("scroll", marcarAtiva, { passive: true });
 marcarAtiva();
-pontos.forEach((p) => p.addEventListener("click", () => document.getElementById(p.dataset.alvo!)?.scrollIntoView()));
+
+// menu em telas pequenas: botão com aria-expanded, fecha com Esc e ao escolher um item
+const botaoMenu = document.querySelector<HTMLButtonElement>(".menu-botao")!;
+const menu = document.querySelector<HTMLElement>("#menu")!;
+const alternarMenu = (abrir: boolean) => {
+  menu.classList.toggle("aberto", abrir);
+  botaoMenu.setAttribute("aria-expanded", String(abrir));
+};
+botaoMenu.addEventListener("click", () => alternarMenu(!menu.classList.contains("aberto")));
+menu.addEventListener("click", (e) => (e.target as HTMLElement).closest("a") && alternarMenu(false));
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && menu.classList.contains("aberto")) {
+    alternarMenu(false);
+    botaoMenu.focus();
+  }
+});
 
 const observador = new IntersectionObserver(
   (itens) => {
@@ -149,13 +177,29 @@ document.querySelectorAll<HTMLAnchorElement>("[data-app]").forEach((a) => (a.hre
 // ----------------------------------------------------------------- formulário de demonstração
 const form = document.querySelector<HTMLFormElement>("#form-contato")!;
 const status = document.querySelector<HTMLElement>("#form-status")!;
+
+/** Erros em texto ao lado do campo (lidos pelo leitor de tela) e foco no primeiro inválido. */
+function validar(): boolean {
+  const regras: [string, string, (v: string) => boolean][] = [
+    ["f-nome", "Informe seu nome (pelo menos 2 letras).", (v) => v.trim().length >= 2],
+    ["f-email", "Informe um e-mail válido, como nome@fazenda.com.br.", (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim())],
+  ];
+  let primeiro: HTMLInputElement | null = null;
+  for (const [id, msg, ok] of regras) {
+    const campo = document.getElementById(id) as HTMLInputElement;
+    const erro = document.getElementById(campo.getAttribute("aria-describedby")!)!;
+    const valido = ok(campo.value);
+    campo.setAttribute("aria-invalid", String(!valido));
+    erro.textContent = valido ? "" : msg;
+    if (!valido && !primeiro) primeiro = campo;
+  }
+  primeiro?.focus();
+  return !primeiro;
+}
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   status.className = "";
-  if (!form.checkValidity()) {
-    form.reportValidity();
-    return;
-  }
+  if (!validar()) return;
   const dados = new FormData(form);
   const texto = (k: string) => String(dados.get(k) ?? "").trim() || null;
   const inteiro = (k: string) => (texto(k) === null ? null : Number(texto(k)));
@@ -168,6 +212,8 @@ form.addEventListener("submit", async (e) => {
     maquinas: inteiro("maquinas"),
     mensagem: texto("mensagem"),
     website: texto("website"),
+    aceita_novidades: dados.get("aceita_novidades") === "on",
+    politica_versao: empresa.versaoDocumentos,
     origem: "site",
   };
   const botao = form.querySelector<HTMLButtonElement>("button[type=submit]")!;
@@ -186,7 +232,7 @@ form.addEventListener("submit", async (e) => {
     }
     form.reset();
     status.className = "ok";
-    status.textContent = "Recebido! Entramos em contato em breve.";
+    status.textContent = "Pedido recebido. Vamos responder pelo e-mail informado.";
   } catch (erro) {
     status.className = "erro";
     status.textContent = erro instanceof TypeError ? "Sem conexão com o servidor. Tente de novo." : (erro as Error).message;

@@ -170,8 +170,9 @@ class PostgresRepositorioAlertas:
             return [
                 x["id"]
                 for x in conn.execute(
+                    # Todo formato que vira sessão: trator (jdl), colheitadeira (rcd), ISOBUS.
                     "select id from public.arquivos_brutos where status = 'processado'"
-                    " and tipo = 'jdl'"
+                    " and tipo in ('jdl', 'rcd', 'isoxml')"
                 ).fetchall()
             ]
 

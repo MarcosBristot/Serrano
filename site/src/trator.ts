@@ -153,7 +153,6 @@ export function criarTrator(): Trator {
   for (const lado of [-1, 1]) {
     const p = peca(new THREE.PlaneGeometry(1.75, 0.27), adesivo, [lado * 0.546, 1.56, -1.38], corpo, [0, lado * Math.PI / 2, 0]);
     p.castShadow = false;
-    if (lado > 0) p.scale.x = -1; // texto legível dos dois lados
   }
 
   // pesos dianteiros (lastro)
@@ -247,8 +246,6 @@ export function criarTrator(): Trator {
   };
   spot([-0.3, 1.8, -2.75], [-1.2, 0, -16], 0.45);
   spot([0.3, 1.8, -2.75], [1.2, 0, -16], 0.45);
-  spot([0, 3.15, zc - 1.05], [0, 0, -9], 0.85);
-  spot([0, 3.15, zc + 1.1], [0, 0, 5], 0.9);
 
   return {
     grupo,

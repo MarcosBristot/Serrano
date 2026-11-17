@@ -1,47 +1,46 @@
 <!doctype html>
 <html lang="pt-BR">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0d110f" />
-    <title>Serrano · Telemetria agrícola</title>
+<!-- @parte:cabeca -->
+    <title>Serrano · Gestão de máquinas agrícolas</title>
     <meta name="description" content="A Serrano lê o pendrive do monitor do trator e mostra horas, diesel, área, L/ha e R$/ha por máquina e por talhão." />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@700;800&family=Unbounded:wght@500;700;800&display=swap"
-      rel="stylesheet"
-    />
   </head>
-  <body>
+  <body class="inicio">
+    <a class="pular" href="#conteudo">Pular para o conteúdo</a>
     <canvas id="cena" aria-hidden="true"></canvas>
     <div class="vinheta" aria-hidden="true"></div>
 
     <header class="topo">
       <a href="#inicio" class="marca" aria-label="Serrano, início">
-        <svg viewBox="0 0 64 44" aria-hidden="true"><path d="M3 41 17 15l10 17L39 7l22 34" /></svg>
+        <svg viewBox="0 0 64 44" aria-hidden="true" focusable="false"><path d="M3 41 17 15l10 17L39 7l22 34" /></svg>
         <span>Serrano</span>
       </a>
-      <nav class="menu" aria-label="Seções">
-        <a href="#coleta">Como funciona</a>
-        <a href="#mapa">Mapa de calor</a>
-        <a href="#alertas">Alertas</a>
-        <a href="#resultados">Resultados</a>
+      <button class="menu-botao" type="button" aria-expanded="false" aria-controls="menu">Menu</button>
+      <nav class="menu" id="menu" aria-label="Seções da página">
+        <ul>
+          <li><a href="#coleta">Como funciona</a></li>
+          <li><a href="#mapa">Mapa de calor</a></li>
+          <li><a href="#alertas">Alertas</a></li>
+          <li><a href="#resultados">Resultados</a></li>
+        </ul>
       </nav>
       <div class="acoes">
-        <a class="pilula contorno" data-app href="http://localhost:5173">Entrar</a>
-        <a class="pilula cheia" href="#contato">Agendar demo</a>
+        <a class="botao contorno-claro" data-app href="http://localhost:5173">Entrar</a>
+        <a class="botao trigo" href="#contato"><span class="longo">Agendar demonstração</span><span class="curto">Demonstração</span></a>
       </div>
     </header>
 
-    <ol class="trilho" aria-hidden="true">
-      <li data-alvo="inicio"></li><li data-alvo="coleta"></li><li data-alvo="mapa"></li>
-      <li data-alvo="alertas"></li><li data-alvo="resultados"></li><li data-alvo="contato"></li>
-    </ol>
+    <nav class="trilho" aria-label="Ir para a seção">
+      <a href="#inicio" data-alvo="inicio"><span class="sr">Início</span></a>
+      <a href="#coleta" data-alvo="coleta"><span class="sr">Como funciona</span></a>
+      <a href="#mapa" data-alvo="mapa"><span class="sr">Mapa de calor</span></a>
+      <a href="#alertas" data-alvo="alertas"><span class="sr">Alertas</span></a>
+      <a href="#resultados" data-alvo="resultados"><span class="sr">Resultados</span></a>
+      <a href="#contato" data-alvo="contato"><span class="sr">Demonstração</span></a>
+    </nav>
 
-    <aside class="hud" aria-label="Telemetria de demonstração">
-      <div class="hud-topo"><i></i> TELEMETRIA · DEMO</div>
+    <aside class="hud" aria-hidden="true">
+      <div class="hud-topo"><i></i> Simulação</div>
       <dl>
         <div><dt>Velocidade</dt><dd><b id="hud-vel">0,0</b> km/h</dd></div>
         <div><dt>Área</dt><dd><b id="hud-area">0,00</b> ha</dd></div>
@@ -50,113 +49,147 @@
       </dl>
     </aside>
 
-    <main>
-      <section id="inicio" class="secao heroi" data-cena="inicio">
-        <p class="rotulo revela">Telemetria agrícola · Rio Grande do Sul</p>
-        <h1 class="titulo-xl revela">Cada hectare.<br /><em>Cada litro.</em></h1>
+    <main id="conteudo" tabindex="-1">
+      <section id="inicio" class="secao heroi" data-cena="inicio" aria-labelledby="titulo-inicio">
+        <p class="sobretitulo revela">Gestão de máquinas agrícolas · Rio Grande do Sul</p>
+        <h1 id="titulo-inicio" class="titulo-xl revela">Cada hectare.<br /><em>Cada litro.</em></h1>
         <p class="lead revela">
-          A Serrano lê o pendrive do monitor do trator e transforma em horas, diesel, área, L/ha e R$/ha
-          por máquina e por talhão. Sem instalar nada na cabine.
+          A Serrano lê o pendrive do monitor do trator e transforma os registros em horas, diesel, área,
+          L/ha e R$/ha por máquina e por talhão. Sem instalar equipamento na cabine.
         </p>
         <div class="botoes revela">
-          <a class="pilula cheia grande" href="#contato">Agendar demonstração</a>
-          <a class="pilula contorno grande" href="#coleta">Como funciona</a>
+          <a class="botao trigo grande" href="#contato">Agendar demonstração</a>
+          <a class="botao contorno-claro grande" href="#coleta">Como funciona</a>
         </div>
-        <p class="rolar"><span></span> Role para acompanhar a operação</p>
+        <p class="rolar" aria-hidden="true"><span></span> Role para acompanhar a operação</p>
       </section>
 
-      <section id="coleta" class="secao" data-cena="coleta">
+      <section id="coleta" class="secao" data-cena="coleta" aria-labelledby="titulo-coleta">
         <div class="painel esquerda">
-          <p class="rotulo revela">01 / Coleta</p>
-          <h2 class="titulo revela">Do pendrive ao painel em minutos.</h2>
+          <p class="sobretitulo revela"><span class="espiga" aria-hidden="true"></span>01 · Coleta</p>
+          <h2 id="titulo-coleta" class="titulo revela">Do pendrive ao painel, sem digitar nada.</h2>
           <p class="revela">
             Arraste os arquivos <code>.jdl</code> ou o <code>.zip</code> do pendrive. A Serrano identifica a máquina,
-            separa cada operação, localiza o talhão pelo GPS e calcula a área pela cobertura real, sem contar
-            duas vezes a sobreposição.
+            separa cada operação, localiza o talhão pelo GPS e calcula a área pela cobertura registrada,
+            descontando a sobreposição.
           </p>
-          <ul class="chips revela">
-            <li>Monitores John Deere Gen4</li>
-            <li>Talhões e contornos importados</li>
-            <li>Qualidade do dado por operação</li>
+          <ul class="chips revela" aria-label="Compatibilidade">
+            <li>Monitores John Deere Gen4 (.jdl)</li>
+            <li>Talhões e contornos do monitor</li>
+            <li>Nota de qualidade por operação</li>
           </ul>
         </div>
       </section>
 
-      <section id="mapa" class="secao" data-cena="mapa">
+      <section id="mapa" class="secao" data-cena="mapa" aria-labelledby="titulo-mapa">
         <div class="painel direita">
-          <p class="rotulo revela">02 / Mapa de calor</p>
-          <h2 class="titulo revela">Veja onde o diesel vai embora.</h2>
+          <p class="sobretitulo revela"><span class="espiga" aria-hidden="true"></span>02 · Mapa de calor</p>
+          <h2 id="titulo-mapa" class="titulo revela">Veja onde o diesel vai embora.</h2>
           <p class="revela">
-            O consumo em L/ha aparece sobre a lavoura em hexágonos. As manchas quentes mostram onde o trator
-            gastou mais: solo pesado, regulagem, sobreposição ou forma de operar.
+            O consumo em L/ha aparece sobre a lavoura em hexágonos. As manchas quentes mostram onde a máquina
+            gastou mais, para você investigar a causa: solo, regulagem, sobreposição ou forma de operar.
           </p>
-          <div class="escala revela" aria-label="Escala de consumo">
-            <span>menor L/ha</span><i></i><span>maior L/ha</span>
+          <div class="escala revela">
+            <span>menor L/ha</span><i aria-hidden="true"></i><span>maior L/ha</span>
           </div>
         </div>
       </section>
 
-      <section id="alertas" class="secao" data-cena="alertas">
+      <section id="alertas" class="secao" data-cena="alertas" aria-labelledby="titulo-alertas">
         <div class="painel esquerda">
-          <p class="rotulo revela">03 / Alertas</p>
-          <h2 class="titulo revela">Motor ligado, trator parado? Você fica sabendo.</h2>
+          <p class="sobretitulo revela"><span class="espiga" aria-hidden="true"></span>03 · Alertas</p>
+          <h2 id="titulo-alertas" class="titulo revela">Motor ligado e trator parado? Fica registrado.</h2>
           <p class="revela">
             Ociosidade, consumo acima do histórico da máquina, salto de GPS e dado inconsistente viram alertas
             com hora, lugar e talhão. A equipe reconhece, comenta e resolve.
           </p>
-          <div class="alerta-exemplo revela" role="img" aria-label="Exemplo de alerta de ociosidade">
-            <div><b>Ociosidade</b><span>exemplo</span></div>
+          <figure class="alerta-exemplo revela">
+            <figcaption><b>Ociosidade</b><span>exemplo ilustrativo</span></figcaption>
             <p>Motor ligado e parado por 47 min no talhão Serra 3. Cerca de 9 L de diesel sem produzir.</p>
-          </div>
+          </figure>
         </div>
       </section>
 
-      <section id="resultados" class="secao" data-cena="resultados">
+      <section id="resultados" class="secao" data-cena="resultados" aria-labelledby="titulo-resultados">
         <div class="painel direita largo">
-          <p class="rotulo revela">04 / Resultados</p>
-          <h2 class="titulo revela">Números que fecham a safra.</h2>
-          <div class="numeros">
-            <div class="revela"><b>8,95</b><span>horas de motor</span></div>
-            <div class="revela"><b>155,8</b><span>litros de diesel</span></div>
-            <div class="revela"><b>36,55</b><span>hectares cobertos</span></div>
-            <div class="revela"><b>4,26</b><span>L/ha</span></div>
-          </div>
+          <p class="sobretitulo revela"><span class="espiga" aria-hidden="true"></span>04 · Resultados</p>
+          <h2 id="titulo-resultados" class="titulo revela">Uma operação real, em números.</h2>
+          <dl class="numeros">
+            <div class="revela"><dt>horas de motor</dt><dd>8,95</dd></div>
+            <div class="revela"><dt>litros de diesel</dt><dd>155,8</dd></div>
+            <div class="revela"><dt>hectares cobertos</dt><dd>36,55</dd></div>
+            <div class="revela"><dt>L/ha</dt><dd>4,26</dd></div>
+          </dl>
           <p class="nota revela">
-            Uma operação real processada pela Serrano: um trator, um dia de plantio, R$ 1.026,98 em diesel.
-            Com isso vêm o R$/ha por talhão, a comparação entre safras e a exportação em CSV.
+            Um dia de plantio de um trator, processado pela Serrano a partir do pendrive (custo de diesel no período:
+            R$ 1.026,98). Os números de cada fazenda dependem da máquina, da operação e do solo.
           </p>
         </div>
       </section>
 
-      <section id="contato" class="secao contato" data-cena="contato">
+      <section id="contato" class="secao contato" data-cena="contato" aria-labelledby="titulo-contato">
         <div class="painel largo">
-          <p class="rotulo revela">05 / Demonstração</p>
-          <h2 class="titulo revela">Leve a Serrano para a sua fazenda.</h2>
-          <p class="revela">Conte um pouco da operação. Respondemos em até um dia útil.</p>
-          <form id="form-contato" class="formulario revela" novalidate>
-            <label>Nome<input name="nome" required minlength="2" maxlength="120" autocomplete="name" /></label>
-            <label>E-mail<input name="email" type="email" required maxlength="254" autocomplete="email" /></label>
-            <label>Telefone / WhatsApp<input name="telefone" maxlength="40" autocomplete="tel" inputmode="tel" /></label>
-            <label>Fazenda ou empresa<input name="fazenda" maxlength="160" autocomplete="organization" /></label>
-            <label>Hectares<input name="hectares" type="number" min="0" inputmode="numeric" /></label>
-            <label>Máquinas<input name="maquinas" type="number" min="0" inputmode="numeric" /></label>
-            <label class="inteiro">Mensagem<textarea name="mensagem" rows="3" maxlength="2000"></textarea></label>
-            <label class="armadilha" aria-hidden="true">Site<input name="website" tabindex="-1" autocomplete="off" /></label>
+          <p class="sobretitulo revela"><span class="espiga" aria-hidden="true"></span>05 · Demonstração</p>
+          <h2 id="titulo-contato" class="titulo revela">Leve a Serrano para a sua fazenda.</h2>
+          <p class="revela">Conte um pouco da operação e retornaremos o contato pelo e-mail informado.</p>
+          <form id="form-contato" class="formulario revela" novalidate aria-describedby="aviso-dados">
+            <p class="legenda">Campos marcados com <span aria-hidden="true">*</span><span class="sr">asterisco</span> são obrigatórios.</p>
+            <div class="campo">
+              <label for="f-nome">Nome <span aria-hidden="true">*</span></label>
+              <input id="f-nome" name="nome" required minlength="2" maxlength="120" autocomplete="name" aria-describedby="erro-nome" />
+              <p class="erro" id="erro-nome"></p>
+            </div>
+            <div class="campo">
+              <label for="f-email">E-mail <span aria-hidden="true">*</span></label>
+              <input id="f-email" name="email" type="email" required maxlength="254" autocomplete="email" aria-describedby="erro-email" />
+              <p class="erro" id="erro-email"></p>
+            </div>
+            <div class="campo">
+              <label for="f-telefone">Telefone ou WhatsApp <span class="opcional">(opcional)</span></label>
+              <input id="f-telefone" name="telefone" maxlength="40" autocomplete="tel" inputmode="tel" />
+            </div>
+            <div class="campo">
+              <label for="f-fazenda">Fazenda ou empresa <span class="opcional">(opcional)</span></label>
+              <input id="f-fazenda" name="fazenda" maxlength="160" autocomplete="organization" />
+            </div>
+            <div class="campo">
+              <label for="f-hectares">Área em hectares <span class="opcional">(opcional)</span></label>
+              <input id="f-hectares" name="hectares" type="number" min="0" inputmode="numeric" />
+            </div>
+            <div class="campo">
+              <label for="f-maquinas">Número de máquinas <span class="opcional">(opcional)</span></label>
+              <input id="f-maquinas" name="maquinas" type="number" min="0" inputmode="numeric" />
+            </div>
+            <div class="campo inteiro">
+              <label for="f-mensagem">Mensagem <span class="opcional">(opcional)</span></label>
+              <textarea id="f-mensagem" name="mensagem" rows="3" maxlength="2000"></textarea>
+            </div>
+
+            <div class="armadilha" aria-hidden="true">
+              <label for="f-website">Não preencha</label>
+              <input id="f-website" name="website" tabindex="-1" autocomplete="off" />
+            </div>
+
+            <div class="inteiro opt-in">
+              <input id="f-novidades" name="aceita_novidades" type="checkbox" />
+              <label for="f-novidades">Quero receber novidades da Serrano por e-mail (opcional; você pode cancelar quando quiser).</label>
+            </div>
+
+            <p class="inteiro aviso-dados" id="aviso-dados">
+              Usamos estes dados só para responder ao seu pedido de demonstração e os apagamos em até 12 meses se
+              não houver contratação. Saiba mais na <a href="/privacidade.html">Política de Privacidade</a>.
+            </p>
+
             <div class="inteiro envio">
-              <button class="pilula cheia grande" type="submit">Solicitar demonstração</button>
-              <p id="form-status" role="status"></p>
+              <button class="botao primario grande" type="submit">Solicitar demonstração</button>
+              <p id="form-status" role="status" aria-live="polite"></p>
             </div>
           </form>
         </div>
-        <footer class="rodape">
-          <span class="marca pequena">
-            <svg viewBox="0 0 64 44" aria-hidden="true"><path d="M3 41 17 15l10 17L39 7l22 34" /></svg>
-            <span>Serrano</span>
-          </span>
-          <span>Rio Grande do Sul, Brasil · © 2026</span>
-        </footer>
       </section>
     </main>
+
+<!-- @parte:rodape -->
 
     <script type="module" src="/src/main.ts"></script>
   </body>

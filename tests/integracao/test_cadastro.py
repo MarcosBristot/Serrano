@@ -10,7 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from sistemacampero.interfaces.worker import Worker
-from tests.conftest import emitir_token
+from tests.conftest import ACEITE, emitir_token
 from tests.integracao.apoio import Conn, criar_usuario, drenar, um, upload, zipar
 from tests.sinteticos.gen4 import QUADRADO, gjson_boundary, masterdata_xml
 from tests.sinteticos.jdl_builder import Cenario
@@ -317,7 +317,9 @@ def test_leitor_le_mas_nao_edita_e_org_alheia_nao_ve(
 
     estranho = criar_usuario(admin)
     h = {"Authorization": f"Bearer {emitir_token(estranho)}"}
-    client.post("/api/v1/organizacoes", json={"nome": f"Outra {uuid.uuid4().hex[:6]}"}, headers=h)
+    client.post(
+        "/api/v1/organizacoes", json={"nome": f"Outra {uuid.uuid4().hex[:6]}", **ACEITE}, headers=h
+    )
     assert client.get(f"/api/v1/talhoes/{t['id']}", headers=h).status_code == 404
     assert (
         client.patch(f"/api/v1/talhoes/{t['id']}", json={"nome": "invadido"}, headers=h).status_code

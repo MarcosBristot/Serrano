@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Request, status
 from pydantic import BaseModel, Field
 
 from sistemacampero.domain.tenancy import Papel
 from sistemacampero.interfaces.api.deps import ContainerDep, OrganizacaoDep, PrincipalDep
+from sistemacampero.interfaces.api.routers.contatos import hash_ip
 
 router = APIRouter(tags=["conta"])
 
@@ -29,6 +31,10 @@ class MeOut(BaseModel):
 class OrganizacaoIn(BaseModel):
     nome: str = Field(min_length=2, max_length=120)
     slug: str | None = Field(default=None, min_length=3, max_length=60)
+    aceite_termos: Literal[True] = Field(
+        description="Aceite dos Termos de Serviço e da Política de Privacidade (obrigatório)"
+    )
+    versao_documentos: str = Field(min_length=1, max_length=40)
 
 
 class OrganizacaoOut(BaseModel):
@@ -63,8 +69,14 @@ def me(c: ContainerDep, quem: PrincipalDep) -> MeOut:
 
 
 @router.post("/organizacoes", response_model=OrganizacaoOut, status_code=status.HTTP_201_CREATED)
-def criar_organizacao(c: ContainerDep, quem: PrincipalDep, corpo: OrganizacaoIn) -> OrganizacaoOut:
+def criar_organizacao(
+    c: ContainerDep, quem: PrincipalDep, corpo: OrganizacaoIn, request: Request
+) -> OrganizacaoOut:
     org = c.tenancy.criar_primeira_organizacao(quem, corpo.nome, corpo.slug)
+    if c.aceites is not None:
+        c.aceites.registrar(
+            quem.usuario_id, ["termos", "privacidade"], corpo.versao_documentos, hash_ip(request)
+        )
     return OrganizacaoOut(id=org.id, nome=org.nome, slug=org.slug, fuso=org.fuso, papel=Papel.OWNER)
 
 

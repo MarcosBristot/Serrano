@@ -9,6 +9,7 @@ import re
 import time
 import uuid
 from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import Any
 
 import anyio
@@ -82,16 +83,44 @@ def evento_auditoria(scope: Scope, status: int, rid: str) -> dict[str, Any] | No
     }
 
 
+def evento_acesso(scope: Scope, status: int, rid: str) -> dict[str, Any] | None:
+    """Registro de acesso (Marco Civil, art. 15): data, hora e IP de cada uso da API."""
+    caminho = str(scope["path"])
+    if not caminho.startswith("/api/"):
+        return None
+    estado = scope.get("state") or {}
+    cliente = scope.get("client")
+    ip = None
+    if cliente:
+        try:
+            ip = str(ipaddress.ip_address(cliente[0]))
+        except ValueError:
+            ip = None
+    return {
+        "ocorrido_em": datetime.now(UTC),
+        "ip": ip,
+        "usuario_id": estado.get("usuario_id")
+        or (estado.get("ator_id") if estado.get("ator_tipo", "usuario") == "usuario" else None),
+        "organizacao_id": estado.get("organizacao_id"),
+        "metodo": scope["method"],
+        "rota": _rota_template(scope),
+        "status": status,
+        "request_id": rid,
+    }
+
+
 class RequestContextMiddleware:
     def __init__(
         self,
         app: ASGIApp,
         metricas: Metricas,
         auditar: Callable[[dict[str, Any]], None] | None = None,
+        registrar_acesso: Callable[[dict[str, Any]], None] | None = None,
     ) -> None:
         self.app = app
         self.metricas = metricas
         self.auditar = auditar
+        self.registrar_acesso = registrar_acesso
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -142,6 +171,10 @@ class RequestContextMiddleware:
             metodo = scope["method"]
             self.metricas.requisicoes.labels(metodo, rota, str(status)).inc()
             self.metricas.duracao.labels(metodo, rota).observe(duracao)
+            if self.registrar_acesso is not None:
+                acesso = evento_acesso(scope, status, rid)
+                if acesso is not None:
+                    self.registrar_acesso(acesso)  # só enfileira; a gravação é em lote
             evento = evento_auditoria(scope, status, rid) if self.auditar else None
             if evento is not None and self.auditar is not None:
                 try:
