@@ -173,6 +173,7 @@ const observador = new IntersectionObserver(
 document.querySelectorAll(".revela").forEach((el) => observador.observe(el));
 
 document.querySelectorAll<HTMLAnchorElement>("[data-app]").forEach((a) => (a.href = APP_URL));
+document.querySelectorAll<HTMLAnchorElement>("[data-app-cadastro]").forEach((a) => (a.href = `${APP_URL.replace(/\/$/, "")}/?cadastro`));
 
 // ----------------------------------------------------------------- formulário de demonstração
 const form = document.querySelector<HTMLFormElement>("#form-contato")!;
