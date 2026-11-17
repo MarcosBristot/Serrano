@@ -27,8 +27,13 @@ Um adapter lê o arquivo de um fabricante/tecnologia e devolve o **schema univer
 6. Regressão com o dump real (`scripts/regressao_dump.py`) e linha de base congelada por marca.
 7. ADR com o que foi descoberto do formato e o que ficou em aberto.
 
-## Candidato: ISOXML (ISO 11783-10, TASKDATA + TLG)
+## Já suportados
 
-Padrão aberto exportado por vários monitores (CNH, Case IH, Trimble, Stara…). Um adapter cobriria
-várias marcas. Ainda não se sabe se o ISOXML desses monitores traz consumo de combustível: é preciso
-conferir com amostras reais das máquinas do piloto.
+| Adapter | Formato | Documento |
+|---|---|---|
+| `john_deere/gen4` | `.jdl` (JD-Data/log) | — |
+| `john_deere/gs3` | par `.fdl` + `.fdd` do GreenStar 3 (colheitadeira) | `docs/formatos/greenstar3-rcd.md` |
+| `isobus/isoxml` | `TASKDATA.XML` + `TLGnnnnn.XML/.BIN` (ISO 11783-10), várias marcas | `docs/formatos/isoxml.md` |
+
+Formato que vem em mais de um arquivo (par ou pasta) é empacotado num arquivo só na expansão do
+.zip (`domain.ingestao.empacotar_*`), para o worker processar como uma sessão.

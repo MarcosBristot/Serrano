@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Upload } from "lucide-react";
+import { Combine, Plus, Upload } from "lucide-react";
 import { useState } from "react";
 
 import { Mapa } from "../componentes/Mapa";
@@ -7,7 +7,7 @@ import { Cabecalho, Carregando, Erro, Selo, Vazio } from "../componentes/ui";
 import { useSessao } from "../contextos/Sessao";
 import { api, comParams, orgAtiva } from "../lib/api";
 import { useContornos, useTalhoes } from "../lib/consultas";
-import { num } from "../lib/formato";
+import { nomeTalhao, num } from "../lib/formato";
 import { supabase } from "../lib/supabase";
 
 const ORIGEM: Record<string, string> = { monitor: "do monitor", upload: "arquivo enviado", desenho: "desenhado" };
@@ -39,6 +39,10 @@ export default function Talhoes() {
     onSuccess: () => qc.invalidateQueries(),
   });
 
+  const agrupar = useMutation({
+    mutationFn: () => api<{ talhoes_agrupados: number }>("/talhoes/agrupar", { metodo: "POST" }),
+    onSuccess: () => qc.invalidateQueries(),
+  });
   const comContorno = (lista.data ?? []).filter((t) => t.tem_contorno).length;
 
   return (
@@ -46,6 +50,12 @@ export default function Talhoes() {
       <Cabecalho
         titulo="Talhões"
         sub={`${lista.data?.length ?? 0} talhões · ${comContorno} com contorno. Sem contorno, a operação não é localizada por GPS.`}
+        acoes={podeEditar && (
+          <button className="btn-secundario" onClick={() => agrupar.mutate()} disabled={agrupar.isPending}
+            title="Junta a mesma lavoura escrita de outro jeito pelos monitores (ex.: Mae_Aveia22 = Mãe)">
+            <Combine size={16} /> {agrupar.data ? `${agrupar.data.talhoes_agrupados} repetidos juntados` : "Juntar repetidos"}
+          </button>
+        )}
       />
       {podeEditar && (
         <form className="mb-6 flex max-w-md gap-2" onSubmit={(e) => { e.preventDefault(); criar.mutate(); }}>
@@ -65,7 +75,7 @@ export default function Talhoes() {
               <tbody>
                 {lista.data.map((t) => (
                   <tr key={t.id}>
-                    <td className="font-semibold">{t.nome}</td>
+                    <td className="font-semibold">{nomeTalhao(t.nome)}</td>
                     <td className="text-right">{t.area_ha ? `${num(t.area_ha, 1)} ha` : "—"}</td>
                     <td>{t.tem_contorno ? <Selo tom="ok">{ORIGEM[t.origem_contorno ?? ""] ?? "sim"}</Selo> : <Selo tom="atencao">sem contorno</Selo>}</td>
                     <td className="text-right">

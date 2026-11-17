@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     jwt_audience: str = "authenticated"
     jwks_cache_s: int = Field(default=600, ge=30)
 
+    # "casa": API, worker, banco e arquivos numa máquina própria (docker-compose.casa.yml);
+    # só o login fica no Supabase Auth. Permite storage local em produção e copia os usuários.
+    hospedagem: Literal["nuvem", "casa"] = "nuvem"
+
     # Storage: "supabase" em staging/produção; "local" (disco) em dev/compose/testes.
     storage_backend: Literal["local", "supabase"] = "local"
     storage_dir: Path = Path("./data_storage")
@@ -80,8 +84,14 @@ class Settings(BaseSettings):
             self.supabase_url is None or self.supabase_secret_key is None
         ):
             raise ValueError("STORAGE_BACKEND=supabase exige SUPABASE_URL e SUPABASE_SECRET_KEY.")
-        if self.ambiente in ("staging", "prod") and self.storage_backend == "local":
-            raise ValueError("Em staging/produção o Storage é o do Supabase (disco é efêmero).")
+        if (
+            self.ambiente in ("staging", "prod")
+            and self.storage_backend == "local"
+            and self.hospedagem != "casa"
+        ):
+            raise ValueError(
+                "Em staging/produção na nuvem o Storage é o do Supabase (disco é efêmero)."
+            )
         if self.ambiente == "prod" and "*" in self.cors_origens:
             raise ValueError("CORS_ORIGENS='*' não é permitido em produção.")
         return self

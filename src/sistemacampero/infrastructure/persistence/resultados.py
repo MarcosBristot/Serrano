@@ -23,9 +23,11 @@ import shapely
 from psycopg.types.json import Jsonb
 
 from sistemacampero.application.processamento import ResultadoSessao
+from sistemacampero.domain.colheita import massa_seca_kg, safra_de
 from sistemacampero.domain.ingestao import StatusArquivo
+from sistemacampero.infrastructure.persistence.cadastro import TALHOES_ATIVOS, achar_talhao
 from sistemacampero.infrastructure.persistence.db import Conexao, Database
-from sistemacampero.infrastructure.persistence.kpis import recalcular_diarias
+from sistemacampero.infrastructure.persistence.kpis import recalcular_diarias, recalcular_jornadas
 
 COLUNAS_TELEMETRIA = (
     "ts",
@@ -42,6 +44,69 @@ COLUNAS_TELEMETRIA = (
     "engine_hours",
     "engine_on",
 )
+
+JANELA_S = 20  # trabalhando: ~28 m entre pontos a 5 km/h
+JANELA_PARADO_S = 60  # parado, desligado ou sem velocidade
+_MEDIAS = (
+    "speed_kmh",
+    "speed_alt_kmh",
+    "engine_rpm",
+    "engine_load_pct",
+    "fuel_rate_lph",
+    "fuel_level_l",
+)
+_ULTIMOS = ("fuel_total_l", "engine_hours")
+
+
+def compactar(
+    limpo: pd.DataFrame,
+    talhoes: list[Any],
+    janela_s: int = JANELA_S,
+    janela_parado_s: int = JANELA_PARADO_S,
+) -> pd.DataFrame:
+    """1 Hz -> uma linha por janela com estado e talhão constantes.
+
+    Trabalhando, janelas de até ``janela_s`` (o trajeto e o mapa de calor precisam do ponto a
+    cada poucos metros); parado, desligado ou sem velocidade, de até ``janela_parado_s`` (não
+    há o que desenhar). O segundo a segundo fica no Parquet do storage.
+
+    O estado separa desligado / parado / trabalhando / sem velocidade, então os filtros das
+    consultas (``engine_on``, ``speed_kmh >= 1``) continuam valendo linha a linha. Médias são
+    soma / segundos (NaN conta como 0, como o ``sum`` do SQL); ``peso_s`` guarda os segundos.
+    """
+    df = limpo[list(COLUNAS_TELEMETRIA)].copy()
+    df["talhao_id"] = talhoes
+    ligado = df["engine_on"].fillna(False).astype(bool)
+    vel = df["speed_kmh"]
+    estado = np.select(
+        [~ligado, vel.isna(), vel >= 1], [0, 3, 2], default=1
+    )  # 0 desligado, 1 parado, 2 trabalhando, 3 sem velocidade
+    # floor por data (não depende da unidade interna, ns ou us); a janela depende do estado
+    balde = (
+        df["ts"]
+        .dt.floor(f"{janela_s}s")
+        .where(estado == 2, df["ts"].dt.floor(f"{janela_parado_s}s"))
+    )
+    talhao = df["talhao_id"].fillna("-").astype(str)  # sem talhão é um valor, não "ausente"
+    gps = df["gps_valid"].fillna(False).astype(bool)
+    novo = (
+        (balde != balde.shift())
+        | (estado != np.roll(estado, 1))
+        | (talhao != talhao.shift())
+        | (gps != gps.shift())
+    )
+    novo.iloc[0] = True
+    grupo = novo.cumsum()
+    g = df.groupby(grupo, sort=False)
+    out = g[["ts", "lat", "lon", "gps_valid", "engine_on", "talhao_id"]].first()
+    peso = g.size()
+    for c in _MEDIAS:
+        out[c] = g[c].sum(min_count=1) / peso
+    for c in _ULTIMOS:
+        out[c] = g[c].last()
+    out["peso_s"] = peso
+    return out.reset_index(drop=True)
+
 
 PLANO_LIMITE = "PLANO_LIMITE_MAQUINAS"
 MAQUINA_INATIVA = "MAQUINA_INATIVA"
@@ -103,13 +168,7 @@ class PostgresRepositorioResultados:
                 meta.fazenda_guid,
                 {"nome": meta.fazenda_nome, "cliente_nome": meta.cliente_nome},
             )
-            talhao_monitor_id = self._upsert_guid(
-                conn,
-                "talhoes",
-                organizacao_id,
-                meta.talhao_guid,
-                {"nome": meta.talhao_nome, "fazenda_id": fazenda_id},
-            )
+            talhao_monitor_id = self._talhao_monitor(conn, organizacao_id, meta, fazenda_id)
             implemento_id = self._implemento(conn, organizacao_id, r)
             # GPS (ou manual, que o SQL preserva) > talhão escolhido no monitor.
             talhao_id = r.talhao_id or talhao_monitor_id
@@ -125,12 +184,16 @@ class PostgresRepositorioResultados:
                 r,
             )
             self._telemetria(conn, organizacao_id, maquina_id, sessao_id, r)
+            self._colheita(conn, organizacao_id, sessao_id, r)
             self._cobertura(conn, organizacao_id, sessao_id, versao_regras, r)
             execucao_id = self._execucao(
                 conn, organizacao_id, sessao_id, versao_regras, config_regras
             )
             self._metricas(conn, organizacao_id, sessao_id, versao_regras, execucao_id, r)
             recalcular_diarias(
+                conn, organizacao_id, maquina_id, meta.inicio, meta.fim, versao_regras
+            )
+            recalcular_jornadas(
                 conn, organizacao_id, maquina_id, meta.inicio, meta.fim, versao_regras
             )
             self._alertas(
@@ -190,9 +253,10 @@ class PostgresRepositorioResultados:
         conn.execute(
             "update public.maquinas set"
             " primeira_atividade = least(coalesce(primeira_atividade, %s), %s),"
-            " ultima_atividade = greatest(coalesce(ultima_atividade, %s), %s)"
+            " ultima_atividade = greatest(coalesce(ultima_atividade, %s), %s),"
+            " modelo = coalesce(modelo, %s)"
             " where id = %s",
-            (meta.inicio, meta.inicio, meta.fim, meta.fim, maquina_id),
+            (meta.inicio, meta.inicio, meta.fim, meta.fim, meta.modelo, maquina_id),
         )
         return maquina_id, None
 
@@ -213,6 +277,67 @@ class PostgresRepositorioResultados:
             valores,
         ).fetchone()
         return _uuid(linha)
+
+    @staticmethod
+    def _colheita(conn: Conexao, org: UUID, sessao_id: UUID, r: ResultadoSessao) -> None:
+        """Resumo da colheita (massa seca e área com a plataforma baixa), refeito a cada versão."""
+        c = r.sessao.colheita
+        conn.execute("delete from public.colheitas where sessao_id = %s", (sessao_id,))
+        if c is None or c.massa_umida_kg <= 0:
+            return
+        conn.execute(
+            "insert into public.colheitas (sessao_id, organizacao_id, cultura, variedade, safra,"
+            " massa_umida_kg, umidade_pct, massa_seca_kg, area_colhida_ha)"
+            " values (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (
+                sessao_id,
+                org,
+                c.cultura,
+                c.variedade,
+                safra_de(c.cultura, r.sessao.metadados.inicio),
+                c.massa_umida_kg,
+                c.umidade_pct,
+                massa_seca_kg(c),
+                c.area_colhida_ha,
+            ),
+        )
+
+    def _talhao_monitor(
+        self, conn: Conexao, org: UUID, meta: Any, fazenda_id: UUID | None
+    ) -> UUID | None:
+        """O talhão escolhido no monitor, já resolvido para a lavoura que ele é.
+
+        Guid conhecido: o talhão dele (ou o principal, se foi agrupado). Guid novo com nome de
+        uma lavoura que já existe ("CoxilhaGrand_Trigo22" = "Coxilha Grande"): guarda o guid
+        num registro agrupado e devolve o existente. Só cria talhão novo quando não há nenhum.
+        """
+        if not meta.talhao_guid or not meta.talhao_nome:
+            return None
+        conhecido = conn.execute(
+            "select coalesce(agrupado_em, id) as id from public.talhoes"
+            " where organizacao_id = %s and external_guid = %s",
+            (org, meta.talhao_guid),
+        ).fetchone()
+        if conhecido is not None:
+            return _uuid(conhecido)
+        achado = achar_talhao(conn.execute(TALHOES_ATIVOS, (org,)).fetchall(), meta.talhao_nome)
+        if achado is None:
+            return self._upsert_guid(
+                conn,
+                "talhoes",
+                org,
+                meta.talhao_guid,
+                {"nome": meta.talhao_nome, "fazenda_id": fazenda_id},
+            )
+        conn.execute(
+            "insert into public.talhoes"
+            " (organizacao_id, external_guid, nome, fazenda_id, ativo, agrupado_em)"
+            " values (%s, %s, %s, %s, false, %s)"
+            " on conflict (organizacao_id, external_guid) do nothing",
+            (org, meta.talhao_guid, meta.talhao_nome, fazenda_id, achado["id"]),
+        )
+        principal: UUID = achado["id"]
+        return principal
 
     def _implemento(self, conn: Conexao, org: UUID, r: ResultadoSessao) -> UUID | None:
         """O do cadastro do monitor (mesmo nome) se existir; senão cria um pelo .jdl."""
@@ -338,22 +463,22 @@ class PostgresRepositorioResultados:
             " ts timestamptz, lat double precision, lon double precision, gps_valid boolean,"
             " speed_kmh real, speed_alt_kmh real, engine_rpm real, engine_load_pct real,"
             " fuel_rate_lph real, fuel_total_l double precision, fuel_level_l real,"
-            " engine_hours double precision, engine_on boolean, talhao_id uuid)"
+            " engine_hours double precision, engine_on boolean, talhao_id uuid, peso_s smallint)"
             " on commit drop"
         )
-        df = limpo[list(COLUNAS_TELEMETRIA)].astype(object)
-        por_ponto = r.localizacao.por_ponto if r.localizacao else [None] * len(df)
-        df["talhao_id"] = pd.Series(por_ponto, index=df.index, dtype=object)
-        df = df.where(pd.notna(df), None)
+        por_ponto = r.localizacao.por_ponto if r.localizacao else [None] * len(limpo)
+        df = compactar(limpo, list(por_ponto))[[*COLUNAS_TELEMETRIA, "talhao_id", "peso_s"]]
+        df = df.astype(object).where(pd.notna(df), None)
         with conn.cursor().copy(
-            f"copy _telemetria_carga ({', '.join(COLUNAS_TELEMETRIA)}, talhao_id) from stdin"
+            f"copy _telemetria_carga ({', '.join(COLUNAS_TELEMETRIA)}, talhao_id, peso_s)"
+            " from stdin"
         ) as copia:
             for linha in df.itertuples(index=False, name=None):
                 copia.write_row([_sem_nan(v) for v in linha])
         conn.execute(
             f"insert into public.telemetria (organizacao_id, maquina_id, sessao_id,"
-            f" {', '.join(COLUNAS_TELEMETRIA)}, talhao_id)"
-            f" select %s, %s, %s, {', '.join(COLUNAS_TELEMETRIA)}, talhao_id"
+            f" {', '.join(COLUNAS_TELEMETRIA)}, talhao_id, peso_s)"
+            f" select %s, %s, %s, {', '.join(COLUNAS_TELEMETRIA)}, talhao_id, peso_s"
             " from _telemetria_carga"
             " on conflict (maquina_id, ts) do nothing",  # sessões sobrepostas da mesma máquina
             (org, maquina_id, sessao_id),

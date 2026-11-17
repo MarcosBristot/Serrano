@@ -1,0 +1,118 @@
+# Produção em casa: banco, arquivos, API e worker numa máquina própria; login no Supabase Auth;
+# acesso pela internet com Cloudflare Tunnel (nenhuma porta aberta no roteador).
+#   docker compose -f docker-compose.casa.yml --env-file .env.casa up -d --build
+# Passo a passo: docs/producao-em-casa.md. Volumes separados do ambiente de dev.
+
+name: serrano-casa
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_SENHA:?defina POSTGRES_SENHA no .env.casa}
+    # Só a própria máquina enxerga o banco (para psql/DBeaver); a internet não.
+    ports:
+      - "127.0.0.1:${PORTA_BANCO:-54329}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # Por TCP: na primeira inicialização o Postgres temporário só escuta no socket.
+      test: ["CMD-SHELL", "pg_isready -U postgres -h 127.0.0.1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  migrate:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_SENHA}@db:5432/campero
+      CAMPERO_BACKEND_SENHA: ${CAMPERO_BACKEND_SENHA:?defina CAMPERO_BACKEND_SENHA no .env.casa}
+    command: ["sistemacampero", "db", "migrar", "--criar-banco", "--bootstrap", "--senha-backend-local"]
+    restart: on-failure:5
+
+  api: &app
+    build: .
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    env_file:
+      - path: .env.casa
+    environment:
+      AMBIENTE: prod
+      HOSPEDAGEM: casa
+      DATABASE_URL: postgresql://campero_backend:${CAMPERO_BACKEND_SENHA}@db:5432/campero
+      STORAGE_BACKEND: local
+      STORAGE_DIR: /app/storage
+    volumes:
+      - storage:/app/storage
+    # O túnel chega pela rede interna (http://api:8000); esta porta é só para testar na máquina.
+    ports:
+      - "127.0.0.1:${PORTA_API:-8000}:8000"
+    restart: unless-stopped
+
+  worker:
+    <<: *app
+    command: ["sistemacampero", "worker"]
+    ports: []
+    healthcheck:
+      disable: true
+    deploy:
+      replicas: ${WORKERS:-2}
+
+  # Acesso pela internet: escolha um com COMPOSE_PROFILES no .env.casa (cloudflare ou tailscale).
+  # Cloudflare Tunnel: endereço no seu domínio (precisa de um domínio na Cloudflare).
+  tunel:
+    image: cloudflare/cloudflared:2025.8.1
+    profiles: ["cloudflare"]
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  # Tailscale Funnel: endereço https://<nome>.<tailnet>.ts.net grátis, sem domínio.
+  funnel:
+    image: tailscale/tailscale:v1.84.3
+    profiles: ["tailscale"]
+    hostname: ${TS_NOME:-serrano}
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
+      TS_HOSTNAME: ${TS_NOME:-serrano}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "true"
+      TS_SERVE_CONFIG: /config/funnel.json
+    volumes:
+      - tailscale:/var/lib/tailscale
+      - ./deploy/casa/funnel.json:/config/funnel.json:ro
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  backup:
+    image: postgis/postgis:16-3.4
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    entrypoint: ["bash", "/backup.sh"]
+    environment:
+      PGHOST: db
+      PGUSER: postgres
+      PGPASSWORD: ${POSTGRES_SENHA}
+      BACKUP_HORA: ${BACKUP_HORA:-03}
+      BACKUP_DIAS: ${BACKUP_DIAS:-14}
+      TZ: America/Sao_Paulo
+    volumes:
+      - ./deploy/casa/backup.sh:/backup.sh:ro
+      - storage:/storage:ro
+      - ${BACKUP_DIR:-./backups}:/backups
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  storage:
+  tailscale:

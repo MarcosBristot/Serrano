@@ -19,7 +19,7 @@ from sistemacampero.domain.ingestao import TipoArquivo, nome_para_exibicao, tipo
 
 @dataclass(frozen=True)
 class LimitesZip:
-    max_entradas: int = 10_000
+    max_entradas: int = 50_000  # pendrive real de várias safras: ~14,5 mil entradas
     max_total_bytes: int = 4 * 1024**3
     max_entrada_bytes: int = 512 * 1024**2
     max_taxa_compressao: float = 200.0  # .jdl comprime ~5-20x; 1000x é bomba
@@ -41,7 +41,7 @@ def _caminho_seguro(nome: str) -> bool:
 
 
 def expandir(dados: BinaryIO, limites: LimitesZip | None = None) -> Iterator[EntradaZip]:
-    """Itera as entradas úteis (.jdl, MasterData.xml, .gjson); ignora o resto."""
+    """Itera as entradas úteis (.jdl, MasterData.xml, .gjson, perímetros); ignora o resto."""
     lim = limites or LimitesZip()
     try:
         zf = zipfile.ZipFile(dados)

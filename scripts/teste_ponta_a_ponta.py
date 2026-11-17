@@ -58,7 +58,9 @@ def main() -> int:
     print(f"usuário: {me['email']} | organizações: {[o['nome'] for o in me['organizacoes']]}")
     if not me["organizacoes"]:
         nome = input("Nome da sua organização/fazenda: ").strip() or "Minha Fazenda"
-        print("Ao criar a organização você aceita os Termos de Serviço e a Política de Privacidade.")
+        print(
+            "Ao criar a organização você aceita os Termos de Serviço e a Política de Privacidade."
+        )
         org = api.post(
             "/organizacoes",
             json={"nome": nome, "aceite_termos": True, "versao_documentos": "2026-10-29"},
