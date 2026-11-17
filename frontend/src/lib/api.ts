@@ -18,9 +18,10 @@ export const orgAtiva = {
   set: (id: string | null) => (id ? localStorage.setItem(CHAVE_ORG, id) : localStorage.removeItem(CHAVE_ORG)),
 };
 
-async function cabecalhos(): Promise<Record<string, string>> {
+export async function cabecalhos(): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession();
-  const h: Record<string, string> = {};
+  // API exposta pelo ngrok (plano grátis): sem este cabeçalho ele devolve a página de aviso em vez do JSON.
+  const h: Record<string, string> = { "ngrok-skip-browser-warning": "1" };
   if (data.session) h.Authorization = `Bearer ${data.session.access_token}`;
   const org = orgAtiva.get();
   if (org) h["X-Organizacao-Id"] = org;
