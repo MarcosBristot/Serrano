@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 from sistemacampero.domain.errors import Invalido, NaoEncontrado
 from sistemacampero.domain.tenancy import ContextoOrganizacao, Permissao
 from sistemacampero.interfaces.api.deps import ContainerDep, OrganizacaoDep, exigir
+from sistemacampero.interfaces.api.routers.plataforma import exigir_assinatura_ativa
 
 router = APIRouter(tags=["ingestão"])
 
@@ -120,6 +121,8 @@ def upload(
     lote_id: UUID | None = None,
 ) -> UploadOut:
     assert c.ingestao is not None
+    if c.plataforma is not None:
+        exigir_assinatura_ativa(c.plataforma, ctx.organizacao_id)
     enviado = arquivo or file
     if enviado is None:
         raise Invalido("Envie o arquivo no campo 'arquivo' (ou 'file').", codigo="SEM_ARQUIVO")
@@ -201,6 +204,8 @@ def _limpar_antigos() -> None:
     summary="Inicia um envio em partes (arquivos grandes)",
 )
 def iniciar_partes(c: ContainerDep, ctx: OperarDep, corpo: InicioPartesIn) -> InicioPartesOut:
+    if c.plataforma is not None:
+        exigir_assinatura_ativa(c.plataforma, ctx.organizacao_id)
     maximo = c.settings.max_upload_mb * 1024**2
     if corpo.tamanho > maximo:
         raise Invalido(

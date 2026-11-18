@@ -1,6 +1,8 @@
 name: Migrations
 
 # staging: push na main · produção: tag v*  (só depois do CI verde)
+# Só roda com a variável do repositório MIGRAR_SUPABASE=true (caminho nuvem, docs/deploy.md).
+# Na produção em casa o container "migrate" do docker-compose.casa.yml aplica as migrations.
 on:
   push:
     branches: [main]
@@ -11,6 +13,7 @@ permissions:
 
 jobs:
   migrar:
+    if: vars.MIGRAR_SUPABASE == 'true'
     runs-on: ubuntu-latest
     environment: ${{ startsWith(github.ref, 'refs/tags/v') && 'producao' || 'staging' }}
     env:

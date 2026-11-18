@@ -20,6 +20,7 @@ from sistemacampero.domain.services.geo import Contorno
 from sistemacampero.domain.services.nomes import chave_talhao, mesmo_talhao
 from sistemacampero.infrastructure.parsers.shapefile import nome_normalizado
 from sistemacampero.infrastructure.persistence.db import Conexao, Database
+from sistemacampero.infrastructure.persistence.plataforma import FRAGMENTO_S
 
 _GEOM = "extensions.st_multi(extensions.st_geomfromwkb(%s, 4326))"
 _GEOJSON = "extensions.st_asgeojson(geometria, 7)::json"
@@ -428,7 +429,10 @@ class PostgresRepositorioCadastro:
         for coluna, valor in filtros.items():
             if valor is None:
                 continue
-            if coluna == "inicio":
+            if coluna == "sem_fragmentos":
+                where.append("s.fim - s.inicio >= make_interval(secs => %s)")
+                valor = FRAGMENTO_S
+            elif coluna == "inicio":
                 where.append("s.inicio >= %s")
             elif coluna == "fim":
                 where.append("s.inicio < %s")

@@ -419,8 +419,12 @@ def listar_sessoes(
     fim: datetime | None = None,
     limit: Annotated[int, Query(ge=1, le=1000)] = 100,
     cursor: str | None = None,
+    incluir_fragmentos: Annotated[
+        bool, Query(description="false esconde arquivos com menos de 2 min (liga/desliga)")
+    ] = True,
 ) -> PaginaSessoes:
     filtros = {
+        "sem_fragmentos": None if incluir_fragmentos else True,
         "maquina_id": maquina_id,
         "talhao_id": talhao_id,
         "operacao": operacao,
