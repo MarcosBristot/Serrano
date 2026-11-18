@@ -80,7 +80,8 @@ services:
   tunel:
     image: cloudflare/cloudflared:2026.10.1
     profiles: ["cloudflare"]
-    command: ["tunnel", "--no-autoupdate", "run"]
+    # http2 (TCP 443) em vez de QUIC (UDP 7844): redes de faculdade e de empresa costumam bloquear UDP.
+    command: ["tunnel", "--no-autoupdate", "--protocol", "http2", "run"]
     environment:
       TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
     depends_on:
