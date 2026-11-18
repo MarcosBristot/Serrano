@@ -9,9 +9,15 @@ from uuid import UUID
 from sistemacampero.domain.errors import Invalido, NaoEncontrado
 from sistemacampero.infrastructure.persistence.db import Database
 
-# Sessão abaixo disto é fragmento (liga/desliga do monitor): não entra em razões nem na lista
-# padrão. Mesmo corte do serviço de qualidade (SESSAO_CURTA_S).
+# Fragmento: arquivo com menos de 2 min (liga/desliga do monitor, mesmo corte do SESSAO_CURTA_S
+# da qualidade) ou com menos de 1 min de motor ligado (monitor ligado com o motor desligado).
+# Fica guardado, mas sai da lista padrão e da contagem de operações aproveitadas.
 FRAGMENTO_S = 120
+MOTOR_MINIMO_S = 60
+E_FRAGMENTO = (
+    f"(s.fim - s.inicio < make_interval(secs => {FRAGMENTO_S})"
+    f" or coalesce(ms.motor_h, 0) * 3600 < {MOTOR_MINIMO_S})"
+)
 
 _SITUACAO = (
     "select case"
@@ -138,16 +144,13 @@ class PostgresPlataforma:
             ).fetchone()
             sessoes = conn.execute(
                 "select count(*) as total,"
-                " count(*) filter (where s.fim - s.inicio < make_interval(secs => %(frag)s))"
-                "   as fragmentos,"
+                f" count(*) filter (where {E_FRAGMENTO}) as fragmentos,"
                 " count(*) filter (where s.fim = s.inicio) as sem_duracao,"
-                " coalesce(sum(ms.motor_h) filter"
-                "   (where s.fim - s.inicio < make_interval(secs => %(frag)s)), 0) as fragmentos_motor_h,"
+                f" coalesce(sum(ms.motor_h) filter (where {E_FRAGMENTO}), 0) as fragmentos_motor_h,"
                 " coalesce(sum(ms.motor_h), 0) as motor_h,"
                 " coalesce(sum(ms.motor_h) filter (where s.qualidade_score >= 80), 0)"
                 "   as motor_h_confiavel,"
-                " round(avg(s.qualidade_score) filter"
-                "   (where s.fim - s.inicio >= make_interval(secs => %(frag)s))) as score_medio"
+                f" round(avg(s.qualidade_score) filter (where not {E_FRAGMENTO})) as score_medio"
                 " from public.sessoes_trabalho s"
                 " left join public.metricas_sessao ms on ms.sessao_id = s.id and ms.vigente"
                 " where s.organizacao_id = %(o)s" + janela,

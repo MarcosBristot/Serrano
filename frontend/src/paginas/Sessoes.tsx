@@ -34,7 +34,7 @@ export default function Sessoes() {
           <>
             <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-folha-900/70">
               <input type="checkbox" checked={fragmentos} onChange={(e) => setFragmentos(e.target.checked)} className="h-4 w-4 accent-broto-500" />
-              Mostrar fragmentos (menos de 2 min)
+              Mostrar fragmentos (menos de 2 min ou sem motor)
             </label>
             <SeletorPeriodo />
             <button

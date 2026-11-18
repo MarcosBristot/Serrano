@@ -103,7 +103,8 @@ def test_schema_tipos_e_unidades(adapter: TelemetryAdapter) -> None:
     assert len(df) == pytest.approx(30 * 60, abs=2)
     assert df["speed_kmh"].median() == pytest.approx(8.0, rel=0.01)  # km/h
     assert df["fuel_rate_lph"].median() == pytest.approx(22.0, rel=0.01)  # L/h
-    if "engine_rpm" not in s.diagnostico.canais_ausentes:  # nem todo monitor grava RPM
+    sem_rpm = s.diagnostico.canais_ausentes + s.diagnostico.canais_fora_do_formato
+    if "engine_rpm" not in sem_rpm:  # nem todo monitor grava RPM
         assert df["engine_rpm"].median() == pytest.approx(1800.0, rel=0.01)
     assert df["gps_valid"].mean() > 0.95
     assert df.loc[df["gps_valid"], "lat"].between(-90, 90).all()
@@ -123,7 +124,8 @@ def test_ausencia_e_nan_nunca_zero(adapter: TelemetryAdapter) -> None:
     s = _parse(adapter, _amostras(adapter).sem_canal())
     assert isinstance(s, ParsedSession)
     assert s.amostras["engine_rpm"].isna().all()
-    assert "engine_rpm" in s.diagnostico.canais_ausentes
+    # Ausente no arquivo ou fora do formato (GreenStar 3 nunca grava RPM): nunca vira 0.
+    assert "engine_rpm" in s.diagnostico.canais_ausentes + s.diagnostico.canais_fora_do_formato
     # Ninguém inventa 0 para o que não foi medido.
     for col in ("speed_alt_kmh", "fuel_level_l"):
         assert not (s.amostras[col] == 0).any()

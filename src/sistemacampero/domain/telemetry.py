@@ -111,6 +111,9 @@ class Diagnostico:
 
     canais: dict[str, dict[str, Any]] = field(default_factory=dict)  # coluna -> origem
     canais_ausentes: list[str] = field(default_factory=list)
+    # Canais que o FORMATO nunca grava (ex.: GreenStar 3 não tem RPM nem horímetro): não é falha
+    # do arquivo, então não tira nota de qualidade; fica registrado para a auditoria.
+    canais_fora_do_formato: list[str] = field(default_factory=list)
     fonte_posicao: str = "nenhuma"  # trilha_gps | caixa_do_bloco | nenhuma
     contadores: dict[str, int] = field(default_factory=dict)
     avisos: list[str] = field(default_factory=list)

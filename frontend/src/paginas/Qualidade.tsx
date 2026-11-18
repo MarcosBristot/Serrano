@@ -116,9 +116,9 @@ export default function Qualidade() {
           <Etapa icone={<FileX2 size={20} />} valor={num(vazios, 0)} rotulo="Sem dado de operação, ignorados" tom="atencao">
             {d.motivos_vazios.map((m) => `${num(m.arquivos, 0)} · ${VAZIO[m.motivo] ?? m.motivo}`).join(" · ") || "Nenhum."}
           </Etapa>
-          <Etapa icone={<ScissorsLineDashed size={20} />} valor={num(s.fragmentos, 0)} rotulo={`Fragmentos de menos de ${d.fragmento_s / 60} min`} tom="atencao">
-            Liga/desliga do monitor ({num(s.sem_duracao, 0)} com duração zero, {horas(s.fragmentos_motor_h)} de motor no total).
-            Ficam guardados, mas fora de L/ha, ranking e médias.
+          <Etapa icone={<ScissorsLineDashed size={20} />} valor={num(s.fragmentos, 0)} rotulo="Fragmentos e arquivos sem motor" tom="atencao">
+            Menos de {d.fragmento_s / 60} min de gravação ou menos de 1 min de motor ligado ({num(s.sem_duracao, 0)} com duração zero).
+            Ficam guardados, mas fora da lista e das médias.
           </Etapa>
           <Etapa icone={<CheckCircle2 size={20} />} valor={num(validas, 0)} rotulo="Operações aproveitadas" tom="ok">
             {s.score_medio != null ? <>Nota média de qualidade {num(s.score_medio, 0)}/100 · {horas(s.motor_h)} de motor</> : "—"}

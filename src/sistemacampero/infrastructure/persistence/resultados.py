@@ -388,6 +388,7 @@ class PostgresRepositorioResultados:
             "diagnostico": {
                 "canais": r.sessao.diagnostico.canais,
                 "canais_ausentes": r.sessao.diagnostico.canais_ausentes,
+                "canais_fora_do_formato": r.sessao.diagnostico.canais_fora_do_formato,
                 "fonte_posicao": r.sessao.diagnostico.fonte_posicao,
                 "contadores": r.sessao.diagnostico.contadores,
                 "avisos": r.sessao.diagnostico.avisos,
