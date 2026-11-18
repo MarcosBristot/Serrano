@@ -78,7 +78,7 @@ services:
 
   # Cloudflare Tunnel: endereço no seu domínio (precisa de um domínio na Cloudflare).
   tunel:
-    image: cloudflare/cloudflared:2025.8.1
+    image: cloudflare/cloudflared:2026.10.1
     profiles: ["cloudflare"]
     command: ["tunnel", "--no-autoupdate", "run"]
     environment:
