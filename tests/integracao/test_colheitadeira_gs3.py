@@ -171,3 +171,20 @@ def test_reprocessar_inclui_a_colheitadeira(
     drenar(worker)
     r = client.post("/api/v1/analysis/run", headers=org["auth"]).json()
     assert r["sessoes_reenfileiradas"] == 1
+
+
+def test_canal_que_o_formato_nao_grava_nao_tira_nota(
+    client: TestClient, worker: Worker, org: dict[str, Any]
+) -> None:
+    """GreenStar 3 não grava RPM, carga, horímetro nem total de diesel: não é defeito do arquivo."""
+    pacote = {
+        f"{PASTA}/6363bd9a.fdl": gs3.construir_fdl(),
+        f"{PASTA}/6363bd9a.fdd": gs3.construir_fdd(gs3.CenarioGs3(minutos=20)),
+    }
+    upload(client, org, zipar(pacote), nome="pendrive.zip")
+    drenar(worker)
+    s = client.get("/api/v1/sessions", headers=org["auth"]).json()["itens"][0]
+    d = client.get(f"/api/v1/sessions/{s['id']}", headers=org["auth"]).json()
+    codigos = [p["codigo"] for p in d["qualidade"]["problemas"]]
+    assert "CANAIS_AUSENTES" not in codigos
+    assert s["qualidade_score"] >= 80

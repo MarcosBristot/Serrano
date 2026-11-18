@@ -18,8 +18,9 @@
         <ul>
           <li><a href="#problema">O problema</a></li>
           <li><a href="#como-funciona">Como funciona</a></li>
+          <li><a href="#integracoes">Integrações</a></li>
           <li><a href="#recursos">Recursos</a></li>
-          <li><a href="#economia">Economia</a></li>
+          <li><a href="#planos">Planos</a></li>
           <li class="so-celular"><a data-app href="http://localhost:5173">Entrar no painel</a></li>
         </ul>
       </nav>
@@ -104,7 +105,7 @@
             fica na média da safra e o prejuízo passa despercebido.
           </p>
         </div>
-        <div class="grade tres">
+        <div class="grade quatro">
           <article class="cartao revela">
             <span class="icone" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16M3 21h14M15 9h2a2 2 0 0 1 2 2v5a1.5 1.5 0 0 0 3 0V8l-3-3M8 7h4" /></svg></span>
             <h3>Diesel sem rastro</h3>
@@ -120,6 +121,52 @@
             <h3>Pendrive na gaveta</h3>
             <p>Os arquivos do monitor ficam esquecidos ou viram uma planilha que ninguém tem tempo de atualizar.</p>
           </article>
+          <article class="cartao revela">
+            <span class="icone" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /><path d="M10 6.5h3.5a1 1 0 0 1 1 1V10M14 17.5h-3.5a1 1 0 0 1-1-1V14M17 4l3 3M20 4l-3 3" /></svg></span>
+            <h3>Cada marca, um sistema</h3>
+            <p>Frota mista vira uma coleção de softwares que não conversam. O dado existe, mas espalhado.</p>
+          </article>
+        </div>
+      </section>
+
+      <!-- ====================================================== integrações (o diferencial) -->
+      <section id="integracoes" class="secao" aria-labelledby="titulo-integracoes">
+        <div class="integracoes-grade">
+          <div>
+            <p class="sobretitulo revela">O diferencial</p>
+            <h2 id="titulo-integracoes" class="revela">Todas as marcas, <em>um painel só.</em></h2>
+            <p class="revela">
+              Trator John Deere, colheitadeira com GreenStar, pulverizador ISOBUS. Cada um grava numa língua e os
+              sistemas das marcas não conversam entre si. A Serrano lê todos, traduz para os mesmos números e
+              devolve para onde você precisa.
+            </p>
+            <ul class="vantagens revela">
+              <li><b>Sem trocar de monitor</b> nem instalar equipamento: usa o que a máquina já grava.</li>
+              <li><b>Frota mista comparável</b>: horas, diesel, L/ha e R$/ha na mesma régua para todas.</li>
+              <li><b>Os dados são seus</b>: saem em planilha, por e-mail, webhook ou API para o seu ERP.</li>
+            </ul>
+          </div>
+          <figure class="hub revela" aria-label="Fontes de dados de várias marcas entram na Serrano e saem para planilha, e-mail e API.">
+            <div class="hub-coluna entrada" aria-hidden="true">
+              <span class="ativo">John Deere Gen4</span>
+              <span class="ativo">GreenStar 3</span>
+              <span class="ativo">ISOBUS · ISOXML</span>
+              <span class="ativo">Shapefile · KML</span>
+              <span class="breve">Operations Center <small>em breve</small></span>
+              <span class="breve">Case IH · New Holland <small>em breve</small></span>
+            </div>
+            <div class="hub-centro" aria-hidden="true">
+              <svg viewBox="0 0 64 44"><path d="M3 41 17 15l10 17L39 7l22 34" /></svg>
+              <b>Serrano</b>
+              <small>traduz, limpa e calcula</small>
+            </div>
+            <div class="hub-coluna saida" aria-hidden="true">
+              <span class="ativo">Painel e mapa</span>
+              <span class="ativo">Planilha · ERP</span>
+              <span class="ativo">E-mail · Webhook</span>
+              <span class="ativo">API REST</span>
+            </div>
+          </figure>
         </div>
       </section>
 
@@ -180,8 +227,8 @@
             </ul>
           </article>
           <article class="cartao revela">
-            <h3>Cobertura real</h3>
-            <p>Área calculada pela faixa que a máquina cobriu, descontando a sobreposição. Nada de área "de cadastro".</p>
+            <h3>Dado tratado com critério</h3>
+            <p>Arquivos vazios, fragmentos de liga/desliga, trechos gravados em dobro e sensor com falha são separados antes de virar número.</p>
           </article>
           <article class="cartao revela">
             <h3>Máquina contra máquina</h3>
@@ -238,6 +285,53 @@
             <div><dt>R$/ha</dt><dd>28,10</dd></div>
           </dl>
           <p class="nota">Um dia de plantio de um trator, lido do pendrive (custo de diesel no período: R$ 1.026,98).</p>
+        </div>
+      </section>
+
+      <!-- ====================================================== planos -->
+      <section id="planos" class="secao" aria-labelledby="titulo-planos">
+        <div class="cabeca-secao centro">
+          <p class="sobretitulo revela">Planos</p>
+          <h2 id="titulo-planos" class="revela">Um preço, tudo incluído. <em>30 dias grátis.</em></h2>
+          <p class="revela">Sem cartão para testar, sem taxa de instalação e sem fidelidade.</p>
+          <div class="ciclo revela" role="group" aria-label="Ciclo de cobrança">
+            <button type="button" data-ciclo="mensal" aria-pressed="true">Mensal</button>
+            <button type="button" data-ciclo="anual" aria-pressed="false">Anual <small>2 meses grátis</small></button>
+          </div>
+        </div>
+        <div class="planos dois">
+          <article class="plano destaque revela">
+            <span class="etiqueta">Tudo incluído</span>
+            <h3>Fazenda</h3>
+            <p>A frota inteira num painel só, com tudo incluído.</p>
+            <div class="preco"><b data-mensal="R$ 400" data-anual="R$ 333">R$ 400</b><span>/mês</span></div>
+            <small class="anual-total" data-anual-total="R$ 4.000 por ano"></small>
+            <ul>
+              <li>Até 10 máquinas</li>
+              <li>Todas as marcas e formatos de monitor</li>
+              <li>Custo por hectare e mapa de calor</li>
+              <li>Alertas de ociosidade e consumo</li>
+              <li>Manutenção pelo horímetro</li>
+              <li>Resumo semanal por e-mail</li>
+              <li>Planilhas e exportação dos dados</li>
+              <li>Usuários ilimitados</li>
+            </ul>
+            <a class="botao lima grande" data-app-cadastro href="http://localhost:5173/?cadastro">Testar grátis</a>
+          </article>
+          <article class="plano revela">
+            <h3>Grupo e cooperativa</h3>
+            <p>Várias fazendas, frotas grandes e integrações sob medida.</p>
+            <div class="preco"><b>Sob consulta</b></div>
+            <small class="anual-total"></small>
+            <ul>
+              <li>Mais de 10 máquinas</li>
+              <li>Várias fazendas e unidades</li>
+              <li>Integração com o seu ERP</li>
+              <li>Implantação acompanhada</li>
+              <li>Suporte dedicado</li>
+            </ul>
+            <a class="botao contorno grande" href="#contato">Falar com a equipe</a>
+          </article>
         </div>
       </section>
 

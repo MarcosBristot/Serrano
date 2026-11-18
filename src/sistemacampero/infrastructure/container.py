@@ -40,6 +40,7 @@ from sistemacampero.infrastructure.persistence.manutencao import PostgresManuten
 from sistemacampero.infrastructure.persistence.organizacoes import (
     PostgresRepositorioOrganizacoes,
 )
+from sistemacampero.infrastructure.persistence.plataforma import PostgresPlataforma
 from sistemacampero.infrastructure.persistence.resultados import PostgresRepositorioResultados
 from sistemacampero.infrastructure.persistence.resumo_semanal import PostgresResumoSemanal
 from sistemacampero.infrastructure.persistence.titular import PostgresTitular, RegistrosDeAcesso
@@ -101,6 +102,7 @@ class Container:
     manutencao: ServicoManutencao | None = None
     resumo_semanal: ServicoResumoSemanal | None = None
     espelho_usuarios: EspelhoDeUsuarios | None = None
+    plataforma: PostgresPlataforma | None = None
 
     def fechar(self) -> None:
         if self.db is not None:
@@ -199,6 +201,7 @@ def construir(settings: Settings, storage: Armazenamento | None = None) -> Conta
         repo_exportacao=repo_exportacao,
         exportacao=exportacao,
         contatos=PostgresContatos(db),
+        plataforma=PostgresPlataforma(db),
         aceites=PostgresAceites(db),
         titular=ServicoTitular(PostgresTitular(db), storage, settings.carencia_exclusao_dias),
         acessos=RegistrosDeAcesso(db),

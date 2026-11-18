@@ -17,7 +17,7 @@ from sistemacampero.domain.tenancy import (
     validar_slug,
 )
 
-PLANO_PADRAO = "basico"
+PLANO_PADRAO = "fazenda"
 DIAS_TRIAL = 30
 
 

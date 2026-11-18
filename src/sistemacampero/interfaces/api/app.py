@@ -35,6 +35,7 @@ from sistemacampero.interfaces.api.routers import (
     jornadas,
     kpis,
     manutencao,
+    plataforma,
     safras,
     saude,
     titular,
@@ -133,4 +134,5 @@ def create_app(
     app.include_router(exportacao.router, prefix=PREFIXO)
     app.include_router(contatos.router, prefix=PREFIXO)
     app.include_router(titular.router, prefix=PREFIXO)
+    app.include_router(plataforma.router, prefix=PREFIXO)
     return app

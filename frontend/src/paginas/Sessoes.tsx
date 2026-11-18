@@ -14,7 +14,8 @@ export default function Sessoes() {
   const { periodo } = usePeriodo();
   const navegar = useNavigate();
   const [baixando, setBaixando] = useState(false);
-  const f = { inicio: periodo.inicio, fim: periodo.fim };
+  const [fragmentos, setFragmentos] = useState(false);
+  const f = { inicio: periodo.inicio, fim: periodo.fim, incluir_fragmentos: fragmentos };
   const q = useInfiniteQuery({
     queryKey: ["sessoes", f],
     queryFn: ({ pageParam }) =>
@@ -28,9 +29,13 @@ export default function Sessoes() {
     <>
       <Cabecalho
         titulo="Arquivos do monitor"
-        sub="Cada arquivo .jdl gravado pelo monitor. As operações (jornadas) juntam esses arquivos."
+        sub="Cada arquivo gravado pelo monitor. As operações (jornadas) juntam esses arquivos."
         acoes={
           <>
+            <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-folha-900/70">
+              <input type="checkbox" checked={fragmentos} onChange={(e) => setFragmentos(e.target.checked)} className="h-4 w-4 accent-broto-500" />
+              Mostrar fragmentos (menos de 2 min ou sem motor)
+            </label>
             <SeletorPeriodo />
             <button
               className="btn-secundario"
@@ -38,7 +43,7 @@ export default function Sessoes() {
               onClick={async () => {
                 setBaixando(true);
                 try {
-                  await baixar("/exportacoes/csv", { tipo: "sessoes", ...f }, "operacoes.csv");
+                  await baixar("/exportacoes/csv", { tipo: "sessoes", inicio: f.inicio, fim: f.fim }, "operacoes.csv");
                 } finally {
                   setBaixando(false);
                 }

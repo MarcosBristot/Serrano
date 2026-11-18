@@ -161,7 +161,12 @@ class JohnDeereGs3Adapter:
                 diag.canais[coluna] = {"origem": origem}
             else:
                 diag.canais_ausentes.append(coluna)
-        diag.canais_ausentes += ["engine_rpm", "engine_load_pct", "engine_hours", "fuel_total_l"]
+        diag.canais_fora_do_formato = [
+            "engine_rpm",
+            "engine_load_pct",
+            "engine_hours",
+            "fuel_total_l",
+        ]
         diag.contadores["registros"] = len(bruta)
         diag.contadores["segundos"] = len(df)
         return no_schema_universal(df)

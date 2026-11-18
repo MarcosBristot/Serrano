@@ -196,7 +196,7 @@ def test_authenticated_ve_so_suas_orgs(admin: Conn, duas_orgs: dict) -> None:
         assert [o["id"] for o in orgs] == [duas_orgs["org_a"]]
         membros = c.execute("select distinct organizacao_id from public.membros").fetchall()
         assert [m["organizacao_id"] for m in membros] == [duas_orgs["org_a"]]
-        assert c.execute("select count(*) as n from public.planos").fetchone() == {"n": 1}
+        assert c.execute("select count(*) as n from public.planos").fetchone() == {"n": 4}
 
 
 def test_authenticated_nao_usa_app_organizacao_id(admin: Conn, duas_orgs: dict) -> None:
