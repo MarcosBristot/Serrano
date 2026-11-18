@@ -1,7 +1,8 @@
 /** Resumo do produtor: o que aconteceu e o que fazer agora, em linguagem direta. */
 import { useQuery } from "@tanstack/react-query";
 import {
-  ArrowRight, CheckCircle2, Clock, Coins, Fuel, LandPlot, Receipt, TriangleAlert, Upload, Wheat, Wrench,
+  ArrowRight, CheckCircle2, Clock, Coins, Fuel, LandPlot, Plug, Receipt, ShieldCheck, TriangleAlert, Upload, Wheat,
+  Wrench,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
@@ -60,6 +61,20 @@ export default function Inicio() {
   const pendencias = useQuery({
     queryKey: ["pendencias"],
     queryFn: () => api<Pendencia[]>("/manutencao/pendencias"),
+  });
+  // Faixa de confiança: de onde vieram os dados e quanto deles é confiável.
+  const fontes = useQuery({
+    queryKey: ["integracoes"],
+    queryFn: () => api<{ nome: string; em_uso: boolean }[]>("/integracoes"),
+    staleTime: 5 * 60_000,
+  });
+  const saude = useQuery({
+    queryKey: ["qualidade", f],
+    queryFn: () =>
+      api<{ confiabilidade_pct: number | null; sessoes: { total: number; fragmentos: number }; arquivos: { vazios: number } }>(
+        "/qualidade",
+        { params: f },
+      ),
   });
   const alertas = useQuery({
     queryKey: ["alertas", "abertos"],
@@ -159,12 +174,28 @@ export default function Inicio() {
             <p className="text-sm font-semibold text-broto-300">{saudacao()} 👋</p>
             <h1 className="mt-1 text-3xl font-extrabold sm:text-4xl">{org?.nome}</h1>
             {r.sessoes > 0 && (
+              <>
               <p className="mt-3 max-w-2xl text-folha-900/80">
                 No período, as máquinas trabalharam <b className="text-folha-950">{horas(r.trabalho_h)}</b>, gastaram{" "}
                 <b className="text-folha-950">{rs(r.custo_rs)}</b> em diesel e cobriram{" "}
                 <b className="text-folha-950">{num(r.area_ha, 0)} ha</b>
                 {massaT > 0 && <>, colhendo <b className="text-folha-950">{num(massaT, 0)} t</b></>}.
               </p>
+              <div className="mt-4 flex flex-wrap gap-2 text-xs">
+                <Link to="/integracoes" className="inline-flex items-center gap-1.5 rounded-full bg-white/5 px-3 py-1.5 font-semibold ring-1 ring-white/10 hover:bg-white/10">
+                  <Plug size={13} className="text-broto-300" />
+                  {(fontes.data ?? []).filter((x) => x.em_uso).map((x) => x.nome).join(" · ") || "Nenhuma fonte ainda"}
+                </Link>
+                {saude.data && (
+                  <Link to="/qualidade" className="inline-flex items-center gap-1.5 rounded-full bg-white/5 px-3 py-1.5 font-semibold ring-1 ring-white/10 hover:bg-white/10">
+                    <ShieldCheck size={13} className="text-broto-300" />
+                    {saude.data.confiabilidade_pct != null && <>{pct(saude.data.confiabilidade_pct)} confiável · </>}
+                    {num(saude.data.sessoes.total - saude.data.sessoes.fragmentos, 0)} operações aproveitadas,{" "}
+                    {num(saude.data.sessoes.fragmentos + saude.data.arquivos.vazios, 0)} arquivos filtrados
+                  </Link>
+                )}
+              </div>
+              </>
             )}
           </div>
           <SeletorPeriodo opcoes={["30d", "safra", "12m", "tudo"]} />

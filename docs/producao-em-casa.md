@@ -9,8 +9,12 @@ em redes que bloqueiam o Postgres (como a da ATITUS), porque o banco nunca sai d
 |---|---|---|
 | Banco, arquivos, API, worker, backup | esta máquina (Docker) | zero |
 | Login | Supabase Auth, plano grátis | zero |
-| Endereço da API | ngrok (`https://<nome>.ngrok-free.app`, fixo) ou Cloudflare Tunnel (precisa de domínio, ~R$ 40/ano) | zero / domínio |
-| Painel e landing | Cloudflare Workers (`https://app.<subdominio>.workers.dev` e `https://www.<subdominio>.workers.dev`) | zero |
+| Endereço da API | Cloudflare Tunnel em `api.sistemaserrano.com.br` (ou ngrok, sem domínio) | domínio ~R$ 40/ano |
+| Painel e landing | Cloudflare Workers: `app.sistemaserrano.com.br` (Worker `app`) e `sistemaserrano.com.br` + `www.` (Worker `www`) | zero |
+
+Hoje (nov/2026): DNS do `sistemaserrano.com.br` na Cloudflare (plano Free), túnel `serrano-casa` com a rota
+`api.sistemaserrano.com.br` → `http://api:8000`, `COMPOSE_PROFILES=cloudflare` e `TUNNEL_TOKEN` no `.env.casa`.
+A Cloudflare grátis recusa requisição acima de **100 MB**: o painel manda pendrive grande em partes de 32 MB.
 
 Sem limite de 50 MB por arquivo nem de 1 GB no total: o limite é o disco. Medido: pendrive de 45 MB
 processa em ~73 s; 4.309 arquivos de trator e colheitadeira em 10 min com 4 workers.
@@ -82,9 +86,12 @@ endereço do painel.
 
 ## 6. Backup e restauração
 
-Todo dia às `BACKUP_HORA` (e ao subir, se o dia ainda não tem cópia), em `BACKUP_DIR/AAAA-MM-DD/`:
-`campero.dump` (banco) e `arquivos.tar.gz` (pendrives). Mantém `BACKUP_DIAS` dias. Para a cópia sair
-da máquina, aponte `BACKUP_DIR` para o HD externo ou para a pasta do Google Drive.
+Todo dia às `BACKUP_HORA` (e ao subir, se o dia ainda não tem cópia): o banco em
+`BACKUP_DIR/AAAA-MM-DD/campero.dump` (mantém `BACKUP_DIAS` dias, padrão 7) e os pendrives em
+`BACKUP_DIR/arquivos/`, um espelho que só copia os arquivos novos (cada arquivo bruto tem o nome do
+seu sha256 e nunca muda). Para a cópia sair da máquina, aponte `BACKUP_DIR` para uma **subpasta** do
+OneDrive ou do Google Drive (ex.: `C:/Users/<você>/OneDrive/SerranoBackups`, com barras normais), ou
+para um HD externo.
 
 Restaurar (Git Bash no Windows; testado apagando banco e arquivos e voltando de um backup da pilha):
 
@@ -96,17 +103,34 @@ $C stop api worker backup
 $C exec db psql -U postgres -c "drop database campero with (force)" -c "create database campero"
 $C cp "$D/campero.dump" db:/tmp/campero.dump
 $C exec db pg_restore -U postgres -d campero /tmp/campero.dump
-$C run --rm --no-deps -v "$D:/b:ro" api sh -c "find /app/storage -mindepth 1 -delete && tar -xzf /b/arquivos.tar.gz -C /app/storage"
+A="$(pwd -W)/backups/arquivos"           # o espelho dos pendrives, dentro do BACKUP_DIR
+$C run --rm --no-deps -v "$A:/a:ro" api sh -c "find /app/storage -mindepth 1 -delete && cp -a /a/. /app/storage/"
 $C up -d
 ```
 
-## 7. Como funciona o login
+## 7. Planos e assinatura
+
+Conta nova ganha 30 dias de teste do plano Fazenda. Teste ou assinatura vencida bloqueia novos envios
+(os dados continuam visíveis). O pagamento ainda é combinado direto (PIX ou boleto): o produtor pede o
+plano em **Plano e assinatura** no painel e você ativa depois de receber.
+
+```bash
+C="docker compose -f docker-compose.casa.yml --env-file .env.casa"
+$C exec api sistemacampero assinatura pedidos --database-url "postgresql://postgres:$POSTGRES_SENHA@db:5432/campero"
+$C exec api sistemacampero assinatura ativar <slug-da-fazenda> --plano fazenda --meses 12 --database-url "..."
+$C exec api sistemacampero assinatura suspender <slug-da-fazenda> --database-url "..."
+```
+
+Preços e recursos ficam na tabela `public.planos` (migration `20261118000000_planos_comerciais.sql`);
+os da landing estão escritos em `site/index.html`: mude os dois juntos.
+
+## 8. Como funciona o login
 
 O painel faz login no Supabase e manda o token para a API. A API confere a assinatura pelo JWKS do
 Supabase e, com `HOSPEDAGEM=casa`, copia o usuário para `auth.users` do banco local no primeiro
 acesso (função `auth.espelhar_usuario`, só no banco local). Nenhum dado da fazenda vai ao Supabase.
 
-## 8. Quando mudar para a nuvem
+## 9. Quando mudar para a nuvem
 
 Primeiro cliente pagante, mais de ~5 fazendas ou a máquina não puder ficar ligada: siga
 [deploy.md](deploy.md) (Supabase Pro em São Paulo + Fly.io). Os dados vêm deste banco com `pg_dump`

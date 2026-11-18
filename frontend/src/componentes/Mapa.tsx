@@ -1,4 +1,5 @@
 /** Mapa de satélite (MapLibre + Esri World Imagery) com camadas GeoJSON da Serrano. */
+import "maplibre-gl/dist/maplibre-gl.css";
 import maplibregl, { type LngLatBoundsLike, type Map as MapaML } from "maplibre-gl";
 import { useEffect, useRef } from "react";
 

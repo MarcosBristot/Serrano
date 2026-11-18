@@ -1,13 +1,15 @@
 import {
-  BarChart3, Bell, ChevronDown, FileText, Home, ListChecks, LogOut, Map, Menu, Settings, Sprout, Tractor,
-  Upload, Wheat, X,
+  BarChart3, Bell, ChevronDown, CreditCard, FileText, Home, ListChecks, LogOut, Map, Menu, Plug, Settings,
+  ShieldCheck, Sprout, Tractor, Upload, Wheat, X,
 } from "lucide-react";
-import { useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { Suspense, useState } from "react";
+import { Link, NavLink, Outlet } from "react-router-dom";
 
 import { Marca } from "./Marca";
+import { Carregando } from "./ui";
 
 import { type Preset, usePeriodo, useSessao } from "../contextos/Sessao";
+import { useAssinatura } from "../paginas/Plano";
 
 // O produtor abre o Resumo e as Máquinas; o resto fica em "Detalhado", para quem quer cavar.
 const MENU: { grupo?: string; itens: { para: string; rotulo: string; icone: typeof Home }[] }[] = [
@@ -18,6 +20,7 @@ const MENU: { grupo?: string; itens: { para: string; rotulo: string; icone: type
       { para: "/maquinas", rotulo: "Máquinas", icone: Tractor },
       { para: "/talhoes", rotulo: "Talhões", icone: Sprout },
       { para: "/mapa", rotulo: "Mapa", icone: Map },
+      { para: "/integracoes", rotulo: "Integrações", icone: Plug },
     ],
   },
   {
@@ -26,12 +29,14 @@ const MENU: { grupo?: string; itens: { para: string; rotulo: string; icone: type
       { para: "/analise", rotulo: "Painel completo", icone: BarChart3 },
       { para: "/jornadas", rotulo: "Operações", icone: ListChecks },
       { para: "/alertas", rotulo: "Alertas", icone: Bell },
+      { para: "/qualidade", rotulo: "Qualidade dos dados", icone: ShieldCheck },
       { para: "/sessoes", rotulo: "Arquivos do monitor", icone: FileText },
     ],
   },
   {
     itens: [
       { para: "/enviar", rotulo: "Enviar pendrive", icone: Upload },
+      { para: "/plano", rotulo: "Plano e assinatura", icone: CreditCard },
       { para: "/configuracoes", rotulo: "Configurações", icone: Settings },
     ],
   },
@@ -132,6 +137,27 @@ function Navegacao({ aoNavegar }: { aoNavegar?: () => void }) {
   );
 }
 
+/** Faixa do teste grátis (últimos 10 dias) ou de envio pausado: some quando a assinatura está ativa. */
+function AvisoAssinatura() {
+  const { data: a } = useAssinatura();
+  if (!a) return null;
+  const pausado = ["trial_vencido", "vencida", "suspensa", "cancelada"].includes(a.situacao);
+  const fimDoTeste = a.situacao === "trial" && (a.dias_restantes ?? 99) <= 10;
+  if (!pausado && !fimDoTeste) return null;
+  return (
+    <div className={`mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl px-4 py-3 text-sm ring-1 ${
+      pausado ? "bg-rose-500/10 text-rose-200 ring-rose-400/30" : "bg-trigo-400/10 text-trigo-200 ring-trigo-400/30"
+    }`}>
+      <span>
+        {pausado
+          ? "O teste grátis terminou: os dados continuam aqui, mas novos envios estão pausados."
+          : `Faltam ${a.dias_restantes} dia${a.dias_restantes === 1 ? "" : "s"} do teste grátis.`}
+      </span>
+      <Link to="/plano" className="btn-trigo !py-1.5">Ver planos</Link>
+    </div>
+  );
+}
+
 const LATERAL = "border-r border-white/10 bg-noite-900/70 backdrop-blur-xl";
 
 export function Layout() {
@@ -158,7 +184,10 @@ export function Layout() {
       </header>
 
       <main className="mx-auto max-w-[1480px] px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
-        <Outlet />
+        <AvisoAssinatura />
+        <Suspense fallback={<Carregando />}>
+          <Outlet />
+        </Suspense>
       </main>
     </div>
   );
