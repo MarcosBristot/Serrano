@@ -60,33 +60,82 @@ export async function api<T>(caminho: string, opcoes: { metodo?: string; corpo?:
   return (await resp.json()) as T;
 }
 
-/** Upload com progresso (fetch não informa progresso de envio). */
+type ResultadoEnvio = { job_id: string | null; arquivo_id: string; duplicado: boolean; status: string; tipo: string };
+
+/** Uma requisição com progresso de envio (fetch não informa progresso de upload). */
+async function xhrComProgresso<T>(
+  metodo: string,
+  url: string,
+  corpo: XMLHttpRequestBodyInit,
+  aoProgredir: (enviados: number) => void,
+  extras: Record<string, string> = {},
+): Promise<T> {
+  const h = { ...(await cabecalhos()), ...extras };
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(metodo, url);
+    for (const [k, v] of Object.entries(h)) xhr.setRequestHeader(k, v);
+    xhr.upload.onprogress = (e) => aoProgredir(e.loaded);
+    xhr.onload = () => {
+      let resposta: any = {};
+      try {
+        resposta = JSON.parse(xhr.responseText);
+      } catch {
+        /* sem corpo */
+      }
+      if (xhr.status >= 200 && xhr.status < 300) resolve(resposta);
+      else if (xhr.status === 413) reject(new ErroApi(413, "ARQUIVO_GRANDE", "Arquivo grande demais para um envio só."));
+      else reject(new ErroApi(xhr.status, resposta.code ?? `HTTP_${xhr.status}`, resposta.detail ?? "Falha no envio", resposta.request_id));
+    };
+    xhr.onerror = () => reject(new ErroApi(0, "REDE", "Sem conexão com a API"));
+    xhr.send(corpo);
+  });
+}
+
+/** Acima disto o arquivo vai em partes: a Cloudflare recusa corpo acima de 100 MB por requisição. */
+const LIMITE_ENVIO_UNICO = 32 * 1024 ** 2;
+const TAMANHO_PARTE = 32 * 1024 ** 2;
+const TENTATIVAS_POR_PARTE = 4;
+
+/** Upload com progresso. Arquivos grandes vão em partes de 32 MB, com nova tentativa se a rede falhar. */
 export async function enviarArquivo(
   arquivo: File,
   params: Params,
   aoProgredir: (fracao: number) => void,
-): Promise<{ job_id: string | null; arquivo_id: string; duplicado: boolean; status: string; tipo: string }> {
-  const h = await cabecalhos();
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", comParams("/telemetry/upload", params));
-    for (const [k, v] of Object.entries(h)) xhr.setRequestHeader(k, v);
-    xhr.upload.onprogress = (e) => e.lengthComputable && aoProgredir(e.loaded / e.total);
-    xhr.onload = () => {
-      let corpo: any = {};
-      try {
-        corpo = JSON.parse(xhr.responseText);
-      } catch {
-        /* sem corpo */
-      }
-      if (xhr.status >= 200 && xhr.status < 300) resolve(corpo);
-      else reject(new ErroApi(xhr.status, corpo.code ?? `HTTP_${xhr.status}`, corpo.detail ?? "Falha no envio", corpo.request_id));
-    };
-    xhr.onerror = () => reject(new ErroApi(0, "REDE", "Sem conexão com a API"));
+): Promise<ResultadoEnvio> {
+  if (arquivo.size <= LIMITE_ENVIO_UNICO) {
     const form = new FormData();
     form.append("arquivo", arquivo, arquivo.name);
-    xhr.send(form);
+    return xhrComProgresso<ResultadoEnvio>("POST", comParams("/telemetry/upload", params), form, (n) =>
+      aoProgredir(Math.min(1, n / arquivo.size)),
+    );
+  }
+
+  const inicio = await api<{ upload_id: string }>("/telemetry/upload/partes", {
+    metodo: "POST",
+    corpo: { nome: arquivo.name, tamanho: arquivo.size },
   });
+  const base = `/telemetry/upload/partes/${inicio.upload_id}`;
+  const total = Math.ceil(arquivo.size / TAMANHO_PARTE);
+  for (let i = 0; i < total; i++) {
+    const de = i * TAMANHO_PARTE;
+    const parte = arquivo.slice(de, Math.min(arquivo.size, de + TAMANHO_PARTE));
+    for (let tentativa = 1; ; tentativa++) {
+      try {
+        await xhrComProgresso("PUT", comParams(`${base}/${i}`), parte, (n) => aoProgredir(Math.min(0.99, (de + n) / arquivo.size)), {
+          "Content-Type": "application/octet-stream",
+        });
+        break;
+      } catch (erro) {
+        const deRede = erro instanceof ErroApi && (erro.status === 0 || erro.status >= 500);
+        if (!deRede || tentativa >= TENTATIVAS_POR_PARTE) throw erro;
+        await new Promise((r) => setTimeout(r, 2000 * tentativa));
+      }
+    }
+  }
+  const r = await api<ResultadoEnvio>(`${base}/concluir`, { metodo: "POST", params });
+  aoProgredir(1);
+  return r;
 }
 
 /** Download autenticado (link comum não manda o token). */

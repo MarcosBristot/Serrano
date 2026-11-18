@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import base64
-from datetime import datetime
+import shutil
+import tempfile
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Annotated, Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from sistemacampero.domain.errors import Invalido, NaoEncontrado
 from sistemacampero.domain.tenancy import ContextoOrganizacao, Permissao
@@ -142,6 +145,153 @@ def upload(
         sha256=r.sha256,
         tipo=r.tipo.value,
         arquivo=enviado.filename or "arquivo",
+        marca=marca,
+        tecnologia=tecnologia,
+    )
+
+
+# ----------------------------------------------------------------- upload em partes
+# A Cloudflare (plano grátis) recusa corpo acima de 100 MB por requisição. Pendrive grande
+# vai em partes de até TAMANHO_PARTE: inicia, envia cada parte em ordem e conclui; a API
+# junta as partes num arquivo temporário e segue o mesmo caminho do upload simples.
+
+TAMANHO_PARTE = 64 * 1024**2  # o painel manda 32 MB; folga para outros clientes
+_VALIDADE_PARTES = timedelta(hours=24)
+_PASTA_PARTES = Path(tempfile.gettempdir()) / "serrano-partes"
+
+
+class InicioPartesIn(BaseModel):
+    nome: str = Field(min_length=1, max_length=255)
+    tamanho: int = Field(gt=0)
+
+
+class InicioPartesOut(BaseModel):
+    upload_id: UUID
+    tamanho_parte: int
+
+
+class ParteOut(BaseModel):
+    recebido: int
+
+
+def _pasta_upload(organizacao_id: UUID, upload_id: UUID) -> Path:
+    pasta = _PASTA_PARTES / str(organizacao_id) / str(upload_id)
+    if not pasta.is_dir():
+        raise NaoEncontrado(
+            "Envio não encontrado ou expirado. Comece de novo.", codigo="ENVIO_NAO_ENCONTRADO"
+        )
+    return pasta
+
+
+def _limpar_antigos() -> None:
+    """Envios abandonados há mais de 24 h (aba fechada no meio, internet caiu)."""
+    limite = (datetime.now(UTC) - _VALIDADE_PARTES).timestamp()
+    for pasta in _PASTA_PARTES.glob("*/*"):
+        try:
+            if pasta.stat().st_mtime < limite:
+                shutil.rmtree(pasta, ignore_errors=True)
+        except OSError:
+            pass
+
+
+@router.post(
+    "/telemetry/upload/partes",
+    response_model=InicioPartesOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Inicia um envio em partes (arquivos grandes)",
+)
+def iniciar_partes(c: ContainerDep, ctx: OperarDep, corpo: InicioPartesIn) -> InicioPartesOut:
+    maximo = c.settings.max_upload_mb * 1024**2
+    if corpo.tamanho > maximo:
+        raise Invalido(
+            f"Arquivo maior que o limite de {c.settings.max_upload_mb} MB.", codigo="ARQUIVO_GRANDE"
+        )
+    _limpar_antigos()
+    upload_id = uuid4()
+    pasta = _PASTA_PARTES / str(ctx.organizacao_id) / str(upload_id)
+    pasta.mkdir(parents=True)
+    (pasta / "nome").write_text(corpo.nome, encoding="utf-8")
+    (pasta / "tamanho").write_text(str(corpo.tamanho), encoding="ascii")
+    (pasta / "arquivo").touch()
+    return InicioPartesOut(upload_id=upload_id, tamanho_parte=TAMANHO_PARTE)
+
+
+@router.put(
+    "/telemetry/upload/partes/{upload_id}/{indice}",
+    response_model=ParteOut,
+    summary="Envia a parte `indice` (0, 1, 2…) em ordem; reenviar a última é aceito",
+)
+async def enviar_parte(
+    c: ContainerDep, ctx: OperarDep, upload_id: UUID, indice: int, request: Request
+) -> ParteOut:
+    pasta = _pasta_upload(ctx.organizacao_id, upload_id)
+    destino = pasta / "arquivo"
+    marcas = pasta / "partes"
+    recebidas = int(marcas.read_text()) if marcas.exists() else 0
+    tamanho_total = int((pasta / "tamanho").read_text())
+    if indice < recebidas:  # reenvio de uma parte já gravada (a resposta se perdeu)
+        return ParteOut(recebido=destino.stat().st_size)
+    if indice != recebidas:
+        raise Invalido(
+            f"Parte fora de ordem: esperava a {recebidas}.", codigo="PARTE_FORA_DE_ORDEM"
+        )
+
+    inicio = destino.stat().st_size
+    escritos = 0
+    with destino.open("ab") as f:
+        async for bloco in request.stream():
+            escritos += len(bloco)
+            if escritos > TAMANHO_PARTE or inicio + escritos > tamanho_total:
+                f.truncate(inicio)
+                raise Invalido("Parte maior que o permitido.", codigo="PARTE_GRANDE")
+            await run_in_threadpool(f.write, bloco)
+    if escritos == 0:
+        raise Invalido("Parte vazia.", codigo="PARTE_VAZIA")
+    marcas.write_text(str(recebidas + 1))
+    return ParteOut(recebido=inicio + escritos)
+
+
+@router.post(
+    "/telemetry/upload/partes/{upload_id}/concluir",
+    response_model=UploadOut,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Junta as partes e processa como um upload comum",
+)
+def concluir_partes(
+    c: ContainerDep,
+    ctx: OperarDep,
+    upload_id: UUID,
+    marca: Annotated[str | None, Query(examples=["john_deere"])] = None,
+    tecnologia: Annotated[str | None, Query(examples=["gen4"])] = None,
+    lote_id: UUID | None = None,
+) -> UploadOut:
+    assert c.ingestao is not None
+    pasta = _pasta_upload(ctx.organizacao_id, upload_id)
+    nome = (pasta / "nome").read_text(encoding="utf-8")
+    esperado = int((pasta / "tamanho").read_text())
+    if (pasta / "arquivo").stat().st_size != esperado:
+        raise Invalido("Faltam partes do arquivo. Envie de novo.", codigo="ENVIO_INCOMPLETO")
+    if (
+        lote_id is not None
+        and c.repo_ingestao is not None
+        and c.repo_ingestao.obter_lote(ctx.organizacao_id, lote_id) is None
+    ):
+        raise NaoEncontrado("Lote não encontrado.", codigo="LOTE_NAO_ENCONTRADO")
+    try:
+        with (pasta / "arquivo").open("rb") as f:
+            r = c.ingestao.receber(
+                ctx.organizacao_id, nome, f, marca=marca, tecnologia=tecnologia, lote_id=lote_id
+            )
+    finally:
+        shutil.rmtree(pasta, ignore_errors=True)
+    return UploadOut(
+        job_id=r.job_id,
+        arquivo_id=r.arquivo_id,
+        duplicado=r.duplicado,
+        status=r.status.value,
+        sha256=r.sha256,
+        tipo=r.tipo.value,
+        arquivo=nome,
         marca=marca,
         tecnologia=tecnologia,
     )
