@@ -376,7 +376,7 @@
 .preco b { font: 800 40px/1 var(--marca); letter-spacing: -0.02em; }
 .preco span { color: var(--texto-2); }
 .anual-total { display: block; min-height: 20px; margin-top: 6px; font-size: 13px; color: var(--texto-2); }
-.plano ul { list-style: none; margin: 18px 0 26px; padding: 18px 0 0; border-top: 1px solid var(--borda); display: grid; gap: 10px; flex: 1; }
+.plano ul { list-style: none; margin: 18px 0 26px; padding: 18px 0 0; border-top: 1px solid var(--borda); display: grid; gap: 10px; flex: 1; align-content: start; }
 .plano li { position: relative; padding-left: 26px; font-size: 15px; color: var(--texto-1); }
 .plano li::before { content: "✓"; position: absolute; left: 2px; color: var(--lima); font-weight: 800; }
 .plano .botao { justify-content: center; }
@@ -397,3 +397,5 @@
   .hub-centro { margin: 0 auto; }
 }
 @media (prefers-reduced-motion: reduce) { .hub-coluna span::after { animation: none; } }
+.planos.dois { grid-template-columns: repeat(2, 1fr); max-width: 860px; margin-inline: auto; }
+@media (max-width: 860px) { .planos.dois { grid-template-columns: 1fr; } }

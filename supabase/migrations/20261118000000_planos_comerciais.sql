@@ -1,4 +1,5 @@
--- Planos comerciais (mensalidade por porte da frota) e pedidos de assinatura feitos pelo painel.
+-- Planos comerciais e pedidos de assinatura feitos pelo painel. Lançamento (nov/2026): um preço
+-- só, R$ 400/mês no plano Fazenda, até o benchmark; o Produtor fica pronto, fora da vitrine.
 -- O pagamento ainda não é automático: o pedido chega à equipe Serrano, que ativa a assinatura
 -- (comando `sistemacampero assinatura ativar`). O limite de máquinas já era aplicado.
 
@@ -21,15 +22,17 @@ values
      'Para quem está começando a medir a frota.', 1, false, false,
      array['Até 3 máquinas', 'Todas as marcas e formatos de monitor', 'Custo por hectare e mapa de calor',
            'Alertas de ociosidade e consumo', 'Usuários ilimitados']),
-    ('fazenda', 'Fazenda', 10, 59000, 590000,
-     'A frota inteira num painel só, com manutenção e relatórios.', 2, true, false,
-     array['Até 10 máquinas', 'Tudo do Produtor', 'Manutenção pelo horímetro',
-           'Resumo semanal por e-mail', 'Planilhas e exportação dos dados', 'Comparativo safra a safra']),
+    ('fazenda', 'Fazenda', 10, 40000, 400000,
+     'A frota inteira num painel só, com tudo incluído.', 2, true, false,
+     array['Até 10 máquinas', 'Todas as marcas e formatos de monitor', 'Custo por hectare e mapa de calor',
+           'Alertas de ociosidade e consumo', 'Manutenção pelo horímetro', 'Resumo semanal por e-mail',
+           'Planilhas e exportação dos dados', 'Usuários ilimitados']),
     ('grupo', 'Grupo e cooperativa', 200, 0, null,
      'Várias fazendas, frotas grandes e integrações sob medida.', 3, false, true,
      array['Mais de 10 máquinas', 'Várias fazendas e unidades', 'Integração com o seu ERP',
            'Implantação acompanhada', 'Suporte dedicado'])
 on conflict (codigo) do nothing;
+update public.planos set publico = false where codigo = 'produtor';
 
 -- Quem ainda está no teste do plano antigo passa a testar o "Fazenda" (o padrão das contas novas).
 update public.assinaturas set plano_codigo = 'fazenda'

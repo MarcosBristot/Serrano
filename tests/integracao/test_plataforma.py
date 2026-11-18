@@ -22,7 +22,7 @@ def test_assinatura_mostra_teste_uso_e_planos(client: TestClient, org: dict[str,
     assert a["situacao"] == "trial" and 28 <= a["dias_restantes"] <= 30
     assert a["uso"]["maquinas"] == 0 and a["uso"]["usuarios"] == 1
     codigos = [p["codigo"] for p in a["planos"]]
-    assert codigos == ["produtor", "fazenda", "grupo"]  # "basico" saiu da vitrine
+    assert codigos == ["fazenda", "grupo"]  # "basico" e "produtor" fora da vitrine
     assert next(p for p in a["planos"] if p["destaque"])["codigo"] == "fazenda"
     assert a["pedido_aberto"] is None
 

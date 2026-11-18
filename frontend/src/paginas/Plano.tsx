@@ -140,7 +140,7 @@ export default function PlanoPagina() {
         </div>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-3">
+      <div className={`grid gap-5 ${a.planos.length === 2 ? "mx-auto max-w-4xl md:grid-cols-2" : "lg:grid-cols-3"}`}>
         {a.planos.map((p) => {
           const atual = a.plano_codigo === p.codigo && a.situacao === "ativa";
           const preco = ciclo === "anual" && p.preco_anual_centavos != null ? p.preco_anual_centavos / 12 : p.preco_mensal_centavos;
@@ -150,7 +150,7 @@ export default function PlanoPagina() {
               className={`cartao relative flex flex-col p-6 ${p.destaque ? "!border-broto-400/50 shadow-[0_0_50px_-18px_rgba(140,198,63,.7)]" : ""}`}
             >
               {p.destaque && (
-                <span className="absolute -top-3 left-6 rounded-full bg-broto-500 px-3 py-1 text-xs font-bold text-noite-950">Mais escolhido</span>
+                <span className="absolute -top-3 left-6 rounded-full bg-broto-500 px-3 py-1 text-xs font-bold text-noite-950">Recomendado</span>
               )}
               <h3 className="font-display text-xl font-extrabold">{p.nome}</h3>
               <p className="mt-1 min-h-[2.5rem] text-sm text-folha-900/60">{p.descricao}</p>
