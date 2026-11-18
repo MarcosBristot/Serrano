@@ -1,0 +1,10 @@
+// Cloudflare Workers (assets estáticos): landing e páginas legais, build do Vite (dist).
+// /termos serve termos.html; rota inexistente devolve o 404 padrão.
+{
+  "name": "www",
+  "compatibility_date": "2025-10-01",
+  "assets": {
+    "directory": "./dist",
+    "html_handling": "auto-trailing-slash"
+  }
+}

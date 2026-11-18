@@ -63,10 +63,22 @@ services:
     deploy:
       replicas: ${WORKERS:-2}
 
-  # Acesso pela internet: escolha um com COMPOSE_PROFILES no .env.casa (cloudflare ou tailscale).
+  # Acesso pela internet: escolha um com COMPOSE_PROFILES no .env.casa (ngrok, cloudflare ou tailscale).
+  # ngrok: endereço fixo grátis https://<nome>.ngrok-free.app, sem domínio (o painel manda o
+  # cabeçalho ngrok-skip-browser-warning para pular a página de aviso do plano grátis).
+  ngrok:
+    image: ngrok/ngrok:3.26.0-alpine
+    profiles: ["ngrok"]
+    command: ["http", "api:8000", "--url", "${NGROK_DOMINIO:-}", "--log", "stdout"]
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:-}
+    depends_on:
+      - api
+    restart: unless-stopped
+
   # Cloudflare Tunnel: endereço no seu domínio (precisa de um domínio na Cloudflare).
   tunel:
-    image: cloudflare/cloudflared:2025.8.1
+    image: cloudflare/cloudflared:2026.10.1
     profiles: ["cloudflare"]
     command: ["tunnel", "--no-autoupdate", "run"]
     environment:

@@ -5,10 +5,9 @@ import { useState } from "react";
 import { Mapa } from "../componentes/Mapa";
 import { Cabecalho, Carregando, Erro, Selo, Vazio } from "../componentes/ui";
 import { useSessao } from "../contextos/Sessao";
-import { api, comParams, orgAtiva } from "../lib/api";
+import { api, cabecalhos, comParams } from "../lib/api";
 import { useContornos, useTalhoes } from "../lib/consultas";
 import { nomeTalhao, num } from "../lib/formato";
-import { supabase } from "../lib/supabase";
 
 const ORIGEM: Record<string, string> = { monitor: "do monitor", upload: "arquivo enviado", desenho: "desenhado" };
 
@@ -26,13 +25,12 @@ export default function Talhoes() {
   });
   const enviarContorno = useMutation({
     mutationFn: async ({ id, arquivo }: { id: string; arquivo: File }) => {
-      const { data } = await supabase.auth.getSession();
       const form = new FormData();
       form.append("arquivo", arquivo);
       const resp = await fetch(comParams(`/talhoes/${id}/contorno/arquivo`), {
         method: "PUT",
         body: form,
-        headers: { Authorization: `Bearer ${data.session?.access_token}`, "X-Organizacao-Id": orgAtiva.get() ?? "" },
+        headers: await cabecalhos(),
       });
       if (!resp.ok) throw new Error((await resp.json()).detail ?? "Falha ao enviar contorno");
     },

@@ -173,6 +173,7 @@ const observador = new IntersectionObserver(
 document.querySelectorAll(".revela").forEach((el) => observador.observe(el));
 
 document.querySelectorAll<HTMLAnchorElement>("[data-app]").forEach((a) => (a.href = APP_URL));
+document.querySelectorAll<HTMLAnchorElement>("[data-app-cadastro]").forEach((a) => (a.href = `${APP_URL.replace(/\/$/, "")}/?cadastro`));
 
 // ----------------------------------------------------------------- formulário de demonstração
 const form = document.querySelector<HTMLFormElement>("#form-contato")!;
@@ -222,7 +223,8 @@ form.addEventListener("submit", async (e) => {
   try {
     const r = await fetch(`${API_URL}/contatos`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      // ngrok-skip-browser-warning: API exposta pelo ngrok (plano grátis) mostraria a página de aviso.
+      headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "1" },
       body: JSON.stringify(corpo),
     });
     if (r.status === 429) throw new Error("Muitas tentativas seguidas. Tente de novo em um minuto.");

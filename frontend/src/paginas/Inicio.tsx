@@ -223,7 +223,7 @@ export default function Inicio() {
             </div>
           </section>
 
-          <div className="grid gap-6 xl:grid-cols-2">
+          <div className="grid gap-6 xl:grid-cols-2 [&>*]:min-w-0">
             <section className="cartao p-5" aria-labelledby="t-talhoes">
               <h2 id="t-talhoes" className="mb-1 text-lg font-bold">Diesel por hectare em cada talhão</h2>
               <p className="mb-4 text-sm text-folha-900/60">Quanto custou trabalhar cada hectare.</p>

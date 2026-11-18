@@ -9,8 +9,8 @@ em redes que bloqueiam o Postgres (como a da ATITUS), porque o banco nunca sai d
 |---|---|---|
 | Banco, arquivos, API, worker, backup | esta máquina (Docker) | zero |
 | Login | Supabase Auth, plano grátis | zero |
-| Endereço da API | Tailscale Funnel (`https://serrano.<tailnet>.ts.net`) ou Cloudflare Tunnel (precisa de domínio, ~R$ 40/ano) | zero / domínio |
-| Painel | Cloudflare Pages (`https://<nome>.pages.dev`) | zero |
+| Endereço da API | ngrok (`https://<nome>.ngrok-free.app`, fixo) ou Cloudflare Tunnel (precisa de domínio, ~R$ 40/ano) | zero / domínio |
+| Painel e landing | Cloudflare Workers (`https://app.<subdominio>.workers.dev` e `https://www.<subdominio>.workers.dev`) | zero |
 
 Sem limite de 50 MB por arquivo nem de 1 GB no total: o limite é o disco. Medido: pendrive de 45 MB
 processa em ~73 s; 4.309 arquivos de trator e colheitadeira em 10 min com 4 workers.
@@ -34,17 +34,21 @@ Anote a **Project URL** e a **Publishable key** (`sb_publishable_...`).
 
 ## 3. Endereço público da API
 
-**Tailscale Funnel** (grátis, sem domínio; recomendado para começar):
+**ngrok** (grátis, endereço fixo, sem domínio; recomendado para começar):
 
-1. Crie a conta em tailscale.com (login com Google/GitHub).
-2. **Access controls**: confirme que o Funnel está liberado (`"nodeAttrs": [{"target": ["autogroup:member"], "attr": ["funnel"]}]`;
-   o painel oferece ativar na primeira vez).
-3. **Settings > Keys > Generate auth key** (reusable). Vai no `TS_AUTHKEY`.
-4. O endereço será `https://serrano.<seu-tailnet>.ts.net` (aparece em **Machines** depois de subir).
+1. Crie a conta em ngrok.com (login com Google/GitHub).
+2. **Your Authtoken**: copie para `NGROK_AUTHTOKEN`.
+3. **Domains**: o plano grátis já traz um domínio fixo (`algo.ngrok-free.app`). Copie com `https://`
+   para `NGROK_DOMINIO`. No `.env.casa`, `COMPOSE_PROFILES=ngrok`.
+4. O endereço da API é esse domínio. O painel e a landing mandam o cabeçalho
+   `ngrok-skip-browser-warning`, então a página de aviso do plano grátis não aparece para o produtor.
 
 **Cloudflare Tunnel** (quando tiver domínio): **Zero Trust > Networks > Tunnels > Create**,
 tipo Cloudflared, copie o token (`TUNNEL_TOKEN`), e em **Public hostname** aponte
 `api.seudominio.com.br` para `http://api:8000`. No `.env.casa`, `COMPOSE_PROFILES=cloudflare`.
+
+**Tailscale Funnel** (perfil `tailscale`): ficou configurado, mas no teste de 17/11/2026 os servidores
+do Funnel não entregaram o tráfego para a máquina. Use o ngrok.
 
 ## 4. Subir
 
@@ -52,18 +56,29 @@ tipo Cloudflared, copie o token (`TUNNEL_TOKEN`), e em **Public hostname** apont
 cp .env.casa.example .env.casa      # e preencha (senhas só com letras e números)
 docker compose -f docker-compose.casa.yml --env-file .env.casa up -d --build
 docker compose -f docker-compose.casa.yml --env-file .env.casa ps
-curl https://serrano.<tailnet>.ts.net/ready   # {"status":"ok","checks":{"banco":"ok","storage":"ok"}}
+curl https://<nome>.ngrok-free.app/ready      # {"status":"ok","checks":{"banco":"ok","storage":"ok"}}
 ```
 
 Na primeira subida o `migrate` cria o banco e as tabelas; o `backup` faz a primeira cópia logo em
 seguida. Atualizar depois de um `git pull`: o mesmo `up -d --build`.
 
-## 5. Painel (Cloudflare Pages, grátis)
+## 5. Painel e landing (Cloudflare Workers, grátis)
 
-**Workers & Pages > Create > Pages > Connect to Git**: root `frontend`, build `npm ci && npm run build`,
-saída `dist`, variáveis `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`,
-`VITE_API_URL=https://serrano.<tailnet>.ts.net/api/v1`, `VITE_SITE_URL`. Coloque o endereço
-`https://<nome>.pages.dev` em `FRONTEND_URL` e `CORS_ORIGENS` do `.env.casa` e suba de novo.
+Endereço sem o seu nome: em **Workers & Pages > Account details > Subdomain > Change**, troque o
+subdomínio da conta (ex.: `serranoagro`). Os endereços ficam `https://app.serranoagro.workers.dev`
+(painel) e `https://www.serranoagro.workers.dev` (landing). Os nomes `app` e `www` vêm dos
+`wrangler.jsonc` de `frontend/` e `site/`: o Worker na Cloudflare precisa ter o mesmo nome.
+
+| Worker | Root directory | Build command | Deploy command | Variáveis do build |
+|---|---|---|---|---|
+| `app` | `frontend` | `npm ci && npm run build` | `npx wrangler deploy` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_API_URL=https://<nome>.ngrok-free.app/api/v1`, `VITE_SITE_URL=https://www.<subdominio>.workers.dev` |
+| `www` | `site` | `npm ci && npm run build` | `npx wrangler deploy` | `VITE_API_URL=https://<nome>.ngrok-free.app/api/v1`, `VITE_APP_URL=https://app.<subdominio>.workers.dev` |
+
+As variáveis ficam em **Settings > Build > Variables and secrets** (são lidas na hora do build; depois
+de mudar, faça um deploy novo). No `.env.casa`: `FRONTEND_URL` = endereço do painel e
+`CORS_ORIGENS=["https://app.<subdominio>.workers.dev","https://www.<subdominio>.workers.dev"]`
+(a landing também chama a API, no formulário de demonstração); suba de novo. No Supabase, Site URL =
+endereço do painel.
 
 ## 6. Backup e restauração
 

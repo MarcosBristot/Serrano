@@ -98,7 +98,13 @@ def create_app(
             CORSMiddleware,
             allow_origins=cfg.cors_origens,
             allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
-            allow_headers=["Authorization", "Content-Type", "X-Organizacao-Id", "X-Request-ID"],
+            allow_headers=[
+                "Authorization",
+                "Content-Type",
+                "X-Organizacao-Id",
+                "X-Request-ID",
+                "ngrok-skip-browser-warning",  # API exposta pelo ngrok (produção em casa)
+            ],
             expose_headers=["X-Request-ID"],
         )
     # Adicionado por último = mais externo: o request_id vale também para o CORS e erros.
