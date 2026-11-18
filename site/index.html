@@ -2,13 +2,11 @@
 <html lang="pt-BR">
   <head>
 <!-- @parte:cabeca -->
-    <title>Serrano · Gestão de máquinas agrícolas</title>
-    <meta name="description" content="A Serrano lê o pendrive do monitor do trator e mostra horas, diesel, área, L/ha e R$/ha por máquina e por talhão." />
+    <title>Serrano · Telemetria e custo por hectare das máquinas agrícolas</title>
+    <meta name="description" content="A Serrano lê o pendrive do monitor da máquina e mostra diesel, horas, área, L/ha e R$/ha por máquina e por talhão, com alertas de ociosidade. Sem instalar nada na cabine." />
   </head>
   <body class="inicio">
     <a class="pular" href="#conteudo">Pular para o conteúdo</a>
-    <canvas id="cena" aria-hidden="true"></canvas>
-    <div class="vinheta" aria-hidden="true"></div>
 
     <header class="topo">
       <a href="#inicio" class="marca" aria-label="Serrano, início">
@@ -18,120 +16,243 @@
       <button class="menu-botao" type="button" aria-expanded="false" aria-controls="menu">Menu</button>
       <nav class="menu" id="menu" aria-label="Seções da página">
         <ul>
-          <li><a href="#coleta">Como funciona</a></li>
-          <li><a href="#mapa">Mapa de calor</a></li>
-          <li><a href="#alertas">Alertas</a></li>
-          <li><a href="#resultados">Resultados</a></li>
+          <li><a href="#problema">O problema</a></li>
+          <li><a href="#como-funciona">Como funciona</a></li>
+          <li><a href="#recursos">Recursos</a></li>
+          <li><a href="#economia">Economia</a></li>
+          <li class="so-celular"><a data-app href="http://localhost:5173">Entrar no painel</a></li>
         </ul>
       </nav>
       <div class="acoes">
-        <a class="botao contorno-claro" data-app href="http://localhost:5173">Entrar</a>
-        <a class="botao trigo" href="#contato"><span class="longo">Agendar demonstração</span><span class="curto">Demonstração</span></a>
+        <a class="botao fantasma" data-app href="http://localhost:5173">Entrar</a>
+        <a class="botao lima" data-app-cadastro href="http://localhost:5173/?cadastro"><span class="longo">Criar conta grátis</span><span class="curto">Criar conta</span></a>
       </div>
     </header>
 
-    <nav class="trilho" aria-label="Ir para a seção">
-      <a href="#inicio" data-alvo="inicio"><span class="sr">Início</span></a>
-      <a href="#coleta" data-alvo="coleta"><span class="sr">Como funciona</span></a>
-      <a href="#mapa" data-alvo="mapa"><span class="sr">Mapa de calor</span></a>
-      <a href="#alertas" data-alvo="alertas"><span class="sr">Alertas</span></a>
-      <a href="#resultados" data-alvo="resultados"><span class="sr">Resultados</span></a>
-      <a href="#contato" data-alvo="contato"><span class="sr">Demonstração</span></a>
-    </nav>
-
-    <aside class="hud" aria-hidden="true">
-      <div class="hud-topo"><i></i> Simulação</div>
-      <dl>
-        <div><dt>Velocidade</dt><dd><b id="hud-vel">0,0</b> km/h</dd></div>
-        <div><dt>Área</dt><dd><b id="hud-area">0,00</b> ha</dd></div>
-        <div><dt>Diesel</dt><dd><b id="hud-diesel">0,0</b> L</dd></div>
-        <div><dt>Consumo</dt><dd><b id="hud-lha">—</b> L/ha</dd></div>
-      </dl>
-    </aside>
-
     <main id="conteudo" tabindex="-1">
-      <section id="inicio" class="secao heroi" data-cena="inicio" aria-labelledby="titulo-inicio">
-        <p class="sobretitulo revela">Gestão de máquinas agrícolas · Rio Grande do Sul</p>
-        <h1 id="titulo-inicio" class="titulo-xl revela">Cada hectare.<br /><em>Cada litro.</em></h1>
-        <p class="lead revela">
-          A Serrano lê o pendrive do monitor do trator e transforma os registros em horas, diesel, área,
-          L/ha e R$/ha por máquina e por talhão. Sem instalar equipamento na cabine.
-        </p>
-        <div class="botoes revela">
-          <a class="botao trigo grande" data-app-cadastro href="http://localhost:5173/?cadastro">Criar conta grátis</a>
-          <a class="botao contorno-claro grande" href="#contato">Agendar demonstração</a>
-        </div>
-        <p class="rolar" aria-hidden="true"><span></span> Role para acompanhar a operação</p>
-      </section>
-
-      <section id="coleta" class="secao" data-cena="coleta" aria-labelledby="titulo-coleta">
-        <div class="painel esquerda">
-          <p class="sobretitulo revela"><span class="espiga" aria-hidden="true"></span>01 · Coleta</p>
-          <h2 id="titulo-coleta" class="titulo revela">Do pendrive ao painel, sem digitar nada.</h2>
-          <p class="revela">
-            Arraste os arquivos <code>.jdl</code> ou o <code>.zip</code> do pendrive. A Serrano identifica a máquina,
-            separa cada operação, localiza o talhão pelo GPS e calcula a área pela cobertura registrada,
-            descontando a sobreposição.
+      <!-- ====================================================== herói -->
+      <section id="inicio" class="heroi" aria-labelledby="titulo-inicio">
+        <div class="heroi-texto">
+          <p class="selo revela"><i aria-hidden="true"></i> Telemetria agrícola sem instalar nada na cabine</p>
+          <h1 id="titulo-inicio" class="revela">Saiba quanto cada hectare <em>realmente custa.</em></h1>
+          <p class="lead revela">
+            A Serrano lê o pendrive do monitor da máquina e mostra diesel, horas, área, L/ha e R$/ha por máquina e
+            por talhão, com alertas de ociosidade e de consumo fora do padrão.
           </p>
-          <ul class="chips revela" aria-label="Compatibilidade">
-            <li>Monitores John Deere Gen4 (.jdl)</li>
-            <li>Talhões e contornos do monitor</li>
-            <li>Nota de qualidade por operação</li>
+          <div class="botoes revela">
+            <a class="botao lima grande" data-app-cadastro href="http://localhost:5173/?cadastro">Criar conta grátis <span aria-hidden="true">→</span></a>
+            <a class="botao contorno grande" href="#contato">Agendar demonstração</a>
+          </div>
+          <ul class="provas revela" aria-label="Destaques">
+            <li><b>~1 min</b> para processar um pendrive de 45 MB</li>
+            <li><b>0</b> equipamento instalado na máquina</li>
+            <li><b>R$/ha</b> por talhão, máquina e safra</li>
           </ul>
         </div>
+
+        <!-- Painel ilustrativo: números de uma operação real de plantio processada pela Serrano -->
+        <figure class="tela revela" aria-label="Exemplo do painel da Serrano: um dia de plantio com 36,55 hectares, 155,8 litros de diesel, 4,26 litros por hectare e 28,10 reais por hectare.">
+          <div class="tela-barra" aria-hidden="true"><i></i><i></i><i></i><span>app.sistemaserrano.com.br</span></div>
+          <div class="tela-corpo" aria-hidden="true">
+            <div class="tela-cabeca">
+              <div><small>Operação · Plantio</small><b>Talhão Serra 3</b></div>
+              <span class="ao-vivo">Processado</span>
+            </div>
+            <div class="kpis">
+              <div><small>Área</small><b>36,55</b><span>ha</span></div>
+              <div><small>Diesel</small><b>155,8</b><span>L</span></div>
+              <div><small>Consumo</small><b>4,26</b><span>L/ha</span></div>
+              <div class="destaque"><small>Custo</small><b>28,10</b><span>R$/ha</span></div>
+            </div>
+            <div class="mapa">
+              <svg id="mapa-calor" viewBox="0 0 400 220" preserveAspectRatio="xMidYMid slice"></svg>
+              <div class="mapa-legenda"><span>L/ha</span><span>3,2</span><i></i><span>5,4</span></div>
+            </div>
+            <div class="grafico">
+              <small>L/ha por hora de trabalho</small>
+              <svg viewBox="0 0 300 60" preserveAspectRatio="none"><path id="linha-grafico" d="" /><path id="area-grafico" d="" /></svg>
+            </div>
+          </div>
+          <div class="flutua alerta" aria-hidden="true">
+            <b>⚠ Ociosidade</b>
+            <span>Motor ligado e parado por 47 min · ~9 L sem produzir</span>
+          </div>
+          <div class="flutua economia" aria-hidden="true">
+            <small>Horas de motor</small><b>8,95 h</b>
+          </div>
+          <figcaption class="sr">Exemplo ilustrativo do painel.</figcaption>
+        </figure>
       </section>
 
-      <section id="mapa" class="secao" data-cena="mapa" aria-labelledby="titulo-mapa">
-        <div class="painel direita">
-          <p class="sobretitulo revela"><span class="espiga" aria-hidden="true"></span>02 · Mapa de calor</p>
-          <h2 id="titulo-mapa" class="titulo revela">Veja onde o diesel vai embora.</h2>
+      <div class="faixa" aria-label="Compatibilidade">
+        <span>Lê os arquivos de</span>
+        <ul>
+          <li>John Deere Gen4 (.jdl)</li>
+          <li>John Deere GS3</li>
+          <li>ISOBUS · ISOXML</li>
+          <li>Contornos em shapefile</li>
+        </ul>
+      </div>
+
+      <!-- ====================================================== problema -->
+      <section id="problema" class="secao" aria-labelledby="titulo-problema">
+        <div class="cabeca-secao">
+          <p class="sobretitulo revela">O problema</p>
+          <h2 id="titulo-problema" class="revela">O dado já existe. <em>Só não chega até a decisão.</em></h2>
           <p class="revela">
-            O consumo em L/ha aparece sobre a lavoura em hexágonos. As manchas quentes mostram onde a máquina
-            gastou mais, para você investigar a causa: solo, regulagem, sobreposição ou forma de operar.
+            O monitor da máquina grava cada metro trabalhado. Mas, sem tempo para abrir esses arquivos, a gestão
+            fica na média da safra e o prejuízo passa despercebido.
           </p>
-          <div class="escala revela">
-            <span>menor L/ha</span><i aria-hidden="true"></i><span>maior L/ha</span>
+        </div>
+        <div class="grade tres">
+          <article class="cartao revela">
+            <span class="icone" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16M3 21h14M15 9h2a2 2 0 0 1 2 2v5a1.5 1.5 0 0 0 3 0V8l-3-3M8 7h4" /></svg></span>
+            <h3>Diesel sem rastro</h3>
+            <p>Você sabe quanto comprou, mas não onde nem como foi gasto. O consumo de cada talhão some na média.</p>
+          </article>
+          <article class="cartao revela">
+            <span class="icone" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.5 2.5M9 2h6" /></svg></span>
+            <h3>Ociosidade invisível</h3>
+            <p>Motor ligado com a máquina parada queima diesel e hora de motor sem produzir nada, e ninguém vê.</p>
+          </article>
+          <article class="cartao revela">
+            <span class="icone" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 3h6v5H9zM7 8h10v11a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2zM10 5h1M13 5h1" /></svg></span>
+            <h3>Pendrive na gaveta</h3>
+            <p>Os arquivos do monitor ficam esquecidos ou viram uma planilha que ninguém tem tempo de atualizar.</p>
+          </article>
+        </div>
+      </section>
+
+      <!-- ====================================================== como funciona -->
+      <section id="como-funciona" class="secao clara" aria-labelledby="titulo-como">
+        <div class="cabeca-secao">
+          <p class="sobretitulo revela">Como funciona</p>
+          <h2 id="titulo-como" class="revela">Do pendrive ao custo por hectare <em>em três passos.</em></h2>
+        </div>
+        <ol class="passos">
+          <li class="revela">
+            <span class="numero">01</span>
+            <h3>Tire o pendrive do monitor</h3>
+            <p>Do jeito que já é feito hoje. Sem chip, sem antena e sem equipamento novo na cabine.</p>
+          </li>
+          <li class="revela">
+            <span class="numero">02</span>
+            <h3>Arraste para a Serrano</h3>
+            <p>O <code>.zip</code> ou a pasta inteira. A Serrano reconhece o formato, a máquina e cada operação, e ignora o que já foi enviado.</p>
+          </li>
+          <li class="revela">
+            <span class="numero">03</span>
+            <h3>Veja o resultado</h3>
+            <p>Em cerca de um minuto: horas, diesel, área, L/ha e R$/ha por máquina e por talhão, no mapa.</p>
+          </li>
+        </ol>
+      </section>
+
+      <!-- ====================================================== recursos -->
+      <section id="recursos" class="secao" aria-labelledby="titulo-recursos">
+        <div class="cabeca-secao">
+          <p class="sobretitulo revela">O que você enxerga</p>
+          <h2 id="titulo-recursos" class="revela">Telemetria que vira <em>decisão de campo.</em></h2>
+        </div>
+        <div class="bento">
+          <article class="cartao largo revela">
+            <h3>Custo por hectare</h3>
+            <p>L/ha e R$/ha de cada talhão, máquina e operação. Saiba onde a lavoura dá lucro e onde ela come margem.</p>
+            <div class="barras" aria-hidden="true">
+              <p class="barras-titulo"><span>R$/ha por talhão · plantio</span><span>exemplo</span></p>
+              <div style="--v: 0.62"><span>Serra 1</span><i></i><b>R$ 24,80</b></div>
+              <div style="--v: 0.71"><span>Serra 3</span><i></i><b>R$ 28,10</b></div>
+              <div class="quente" style="--v: 0.94"><span>Várzea</span><i></i><b>R$ 37,40</b></div>
+              <div style="--v: 0.55"><span>Coxilha</span><i></i><b>R$ 21,90</b></div>
+            </div>
+          </article>
+          <article class="cartao revela">
+            <h3>Mapa de calor do consumo</h3>
+            <p>O L/ha aparece sobre a lavoura. As manchas quentes mostram onde investigar: solo, regulagem ou forma de operar.</p>
+            <div class="escala" aria-hidden="true"><i></i></div>
+          </article>
+          <article class="cartao revela">
+            <h3>Alertas automáticos</h3>
+            <ul class="lista-alertas">
+              <li><i class="vermelho"></i>Ociosidade com motor ligado</li>
+              <li><i class="amarelo"></i>Consumo acima do histórico da máquina</li>
+              <li><i class="azul"></i>Salto de GPS e dado inconsistente</li>
+            </ul>
+          </article>
+          <article class="cartao revela">
+            <h3>Cobertura real</h3>
+            <p>Área calculada pela faixa que a máquina cobriu, descontando a sobreposição. Nada de área "de cadastro".</p>
+          </article>
+          <article class="cartao revela">
+            <h3>Máquina contra máquina</h3>
+            <p>Compare tratores e colheitadeiras na mesma operação e descubra qual gasta mais para fazer o mesmo serviço.</p>
+          </article>
+          <article class="cartao revela">
+            <h3>Safra a safra</h3>
+            <p>O histórico fica guardado. Compare custo e consumo entre safras e veja se a mudança de manejo deu resultado.</p>
+          </article>
+        </div>
+      </section>
+
+      <!-- ====================================================== economia -->
+      <section id="economia" class="secao" aria-labelledby="titulo-economia">
+        <div class="economia-grade">
+          <div>
+            <p class="sobretitulo revela">Eficiência operacional</p>
+            <h2 id="titulo-economia" class="revela">Quanto vale <em>meio litro por hectare?</em></h2>
+            <p class="revela">
+              Pequenas diferenças de consumo, multiplicadas pela área e pelas passadas da safra, viram dinheiro.
+              Ajuste para a sua fazenda.
+            </p>
+            <form class="calculadora revela" id="calculadora" aria-describedby="nota-calc">
+              <label>Área da fazenda <output for="c-area" id="o-area"></output>
+                <input id="c-area" type="range" min="100" max="10000" step="100" value="1000" />
+              </label>
+              <label>Passadas de máquina por safra <output for="c-passadas" id="o-passadas"></output>
+                <input id="c-passadas" type="range" min="1" max="12" step="1" value="5" />
+              </label>
+              <label>Redução de consumo <output for="c-reducao" id="o-reducao"></output>
+                <input id="c-reducao" type="range" min="0.1" max="2" step="0.1" value="0.5" />
+              </label>
+              <label>Preço do diesel <output for="c-preco" id="o-preco"></output>
+                <input id="c-preco" type="range" min="4" max="9" step="0.05" value="6.60" />
+              </label>
+            </form>
+          </div>
+          <div class="resultado revela" aria-live="polite">
+            <small>Economia estimada por safra</small>
+            <b id="r-reais">R$ 0</b>
+            <span id="r-litros">0 litros de diesel</span>
+            <p id="nota-calc">Simulação: área × passadas × redução de L/ha × preço do diesel. A economia real depende da máquina, da operação e do solo.</p>
+            <a class="botao lima grande" data-app-cadastro href="http://localhost:5173/?cadastro">Começar a medir</a>
           </div>
         </div>
-      </section>
 
-      <section id="alertas" class="secao" data-cena="alertas" aria-labelledby="titulo-alertas">
-        <div class="painel esquerda">
-          <p class="sobretitulo revela"><span class="espiga" aria-hidden="true"></span>03 · Alertas</p>
-          <h2 id="titulo-alertas" class="titulo revela">Motor ligado e trator parado? Fica registrado.</h2>
-          <p class="revela">
-            Ociosidade, consumo acima do histórico da máquina, salto de GPS e dado inconsistente viram alertas
-            com hora, lugar e talhão. A equipe reconhece, comenta e resolve.
-          </p>
-          <figure class="alerta-exemplo revela">
-            <figcaption><b>Ociosidade</b><span>exemplo ilustrativo</span></figcaption>
-            <p>Motor ligado e parado por 47 min no talhão Serra 3. Cerca de 9 L de diesel sem produzir.</p>
-          </figure>
-        </div>
-      </section>
-
-      <section id="resultados" class="secao" data-cena="resultados" aria-labelledby="titulo-resultados">
-        <div class="painel direita largo">
-          <p class="sobretitulo revela"><span class="espiga" aria-hidden="true"></span>04 · Resultados</p>
-          <h2 id="titulo-resultados" class="titulo revela">Uma operação real, em números.</h2>
+        <div class="real revela">
+          <p class="sobretitulo">Uma operação real, processada pela Serrano</p>
           <dl class="numeros">
-            <div class="revela"><dt>horas de motor</dt><dd>8,95</dd></div>
-            <div class="revela"><dt>litros de diesel</dt><dd>155,8</dd></div>
-            <div class="revela"><dt>hectares cobertos</dt><dd>36,55</dd></div>
-            <div class="revela"><dt>L/ha</dt><dd>4,26</dd></div>
+            <div><dt>horas de motor</dt><dd>8,95</dd></div>
+            <div><dt>litros de diesel</dt><dd>155,8</dd></div>
+            <div><dt>hectares cobertos</dt><dd>36,55</dd></div>
+            <div><dt>L/ha</dt><dd>4,26</dd></div>
+            <div><dt>R$/ha</dt><dd>28,10</dd></div>
           </dl>
-          <p class="nota revela">
-            Um dia de plantio de um trator, processado pela Serrano a partir do pendrive (custo de diesel no período:
-            R$ 1.026,98). Os números de cada fazenda dependem da máquina, da operação e do solo.
-          </p>
+          <p class="nota">Um dia de plantio de um trator, lido do pendrive (custo de diesel no período: R$ 1.026,98).</p>
         </div>
       </section>
 
-      <section id="contato" class="secao contato" data-cena="contato" aria-labelledby="titulo-contato">
-        <div class="painel largo">
-          <p class="sobretitulo revela"><span class="espiga" aria-hidden="true"></span>05 · Demonstração</p>
-          <h2 id="titulo-contato" class="titulo revela">Leve a Serrano para a sua fazenda.</h2>
-          <p class="revela">Conte um pouco da operação e retornaremos o contato pelo e-mail informado.</p>
+      <!-- ====================================================== contato -->
+      <section id="contato" class="secao contato" aria-labelledby="titulo-contato">
+        <div class="contato-grade">
+          <div class="contato-texto">
+            <p class="sobretitulo revela">Demonstração</p>
+            <h2 id="titulo-contato" class="revela">Leve a Serrano <em>para a sua fazenda.</em></h2>
+            <p class="revela">
+              Mostramos o painel com os dados do seu próprio pendrive. Conte um pouco da operação e retornamos pelo
+              e-mail informado.
+            </p>
+            <p class="revela">Prefere testar sozinho? <a data-app-cadastro href="http://localhost:5173/?cadastro">Crie a conta grátis</a> e envie o primeiro pendrive.</p>
+          </div>
           <form id="form-contato" class="formulario revela" novalidate aria-describedby="aviso-dados">
             <p class="legenda">Campos marcados com <span aria-hidden="true">*</span><span class="sr">asterisco</span> são obrigatórios.</p>
             <div class="campo">
@@ -181,7 +302,7 @@
             </p>
 
             <div class="inteiro envio">
-              <button class="botao primario grande" type="submit">Solicitar demonstração</button>
+              <button class="botao lima grande" type="submit">Solicitar demonstração</button>
               <p id="form-status" role="status" aria-live="polite"></p>
             </div>
           </form>

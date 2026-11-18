@@ -1,6 +1,6 @@
 # Serrano — site
 
-Página de apresentação da Serrano: um trator 3D (three.js, modelado em código) planta a lavoura conforme a rolagem; cada seção é um quadro-chave da câmera (noite → amanhecer → dia → pôr do sol), com mapa de calor de L/ha, alerta de ociosidade e o formulário "Solicitar demonstração".
+Página de apresentação da Serrano: herói com um painel de telemetria de exemplo (números de uma operação real), o problema, como funciona, recursos, calculadora de economia de diesel e o formulário "Solicitar demonstração". Leve: sem 3D nem imagens de terceiros.
 
 ## Rodar
 
@@ -14,9 +14,9 @@ O formulário envia para `POST {VITE_API_URL}/contatos` (público, limitado por 
 
 ## Onde mexer
 
-- `src/main.ts`: textos são do `index.html`; os quadros-chave da câmera e do céu ficam em `QUADROS`.
-- `src/cena.ts`: lavoura, plantio, rastro de cobertura, mapa de calor, céu.
-- `src/trator.ts`: o trator e a plantadeira.
+- `index.html`: todos os textos.
+- `src/inicio.css`: visual da página inicial (cores em `.inicio`); `src/estilo.css`: base comum, rodapé, cookies e páginas legais.
+- `src/main.ts`: mapa de calor e gráfico do painel de exemplo, calculadora de economia, menu e formulário.
 - `public/serrano-marca.svg` e o `<svg>` do topo: a marca vetorizada a partir do logo. Se houver o SVG original, troque o `path`.
 
-`npm run build` gera `dist/` estático (Vercel, Netlify, Cloudflare Pages).
+`npm run build` gera `dist/` estático (publicado no Worker `www` da Cloudflare, ver `wrangler.jsonc`).

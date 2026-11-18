@@ -1,145 +1,172 @@
 import "./base";
+import "./inicio.css";
 
 import empresa from "../empresa.json";
-import { Cena, type Quadro } from "./cena";
 
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:8000/api/v1";
 const APP_URL = (import.meta.env.VITE_APP_URL as string | undefined) ?? "http://localhost:5173";
-const menosMovimento = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const SVG = "http://www.w3.org/2000/svg";
 
-// ----------------------------------------------------------------- quadros-chave por seção
-const BASE: Omit<Quadro, "dist" | "cam" | "alvo"> = {
-  elevacao: 20, azimute: 120, nevoa: 0xb8c2c8, exposicao: 0.55, noite: 0, calor: 0, alerta: 0, trilha: 0,
-  foco: 15, desfoque: 0.25, brilho: 0.3,
-};
-const QUADROS: Record<string, Quadro & { segura: number }> = {
-  // fim de tarde: câmera baixa no meio do trigo, sol rasante atrás da máquina
-  inicio: {
-    ...BASE, dist: 0, cam: [7.6, 1.32, -9.2], alvo: [3.1, 1.75, 2.4], elevacao: 6, azimute: 334, nevoa: 0xc98a4e,
-    exposicao: 0.5, noite: 0.08, foco: 11.6, desfoque: 0.8, brilho: 0.35, segura: 0,
-  },
-  coleta: {
-    ...BASE, dist: 14, cam: [-8.5, 5.2, 9.5], alvo: [-3.8, 1.0, -2], elevacao: 12, azimute: 100, nevoa: 0xd8c0a0,
-    exposicao: 0.66, trilha: 1, foco: 13.5, desfoque: 0.35, brilho: 0.45, segura: 4,
-  },
-  mapa: {
-    ...BASE, dist: 30, cam: [0.5, 44, 10], alvo: [0, 0, -2], elevacao: 28, azimute: 115, nevoa: 0xb3c0cc,
-    exposicao: 0.5, calor: 1, trilha: 0.6, foco: 45, desfoque: 0.18, brilho: 0.25, segura: 1,
-  },
-  alertas: {
-    ...BASE, dist: 35, cam: [7.5, 3.6, 2.2], alvo: [0, 1.3, 3.2], elevacao: 38, azimute: 135, nevoa: 0xbac6d0,
-    exposicao: 0.5, alerta: 1, trilha: 0.6, foco: 8.5, desfoque: 0.35, brilho: 0.35, segura: 0,
-  },
-  resultados: {
-    ...BASE, dist: 50, cam: [12, 6.5, 1], alvo: [0, 1, -5.5], elevacao: 30, azimute: 165, nevoa: 0xc4c4bc,
-    exposicao: 0.52, trilha: 1, foco: 13.5, desfoque: 0.25, segura: 5,
-  },
-  // pôr do sol à frente, faróis acesos
-  contato: {
-    ...BASE, dist: 72, cam: [-3.5, 2.6, 13], alvo: [0, 1.8, -10], elevacao: 2.5, azimute: 188, nevoa: 0xdc9a62,
-    exposicao: 0.8, noite: 0.25, trilha: 0.8, foco: 13, desfoque: 0.6, brilho: 0.85, segura: 4,
-  },
-};
+const fmt = (v: number, casas = 0) =>
+  v.toLocaleString("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas });
 
-const canvas = document.querySelector<HTMLCanvasElement>("#cena")!;
-const secoes = [...document.querySelectorAll<HTMLElement>("[data-cena]")];
-let cena: Cena | null = null;
-try {
-  cena = new Cena(canvas);
-  cena.semSuavizar = menosMovimento;
-  if (import.meta.env.DEV) Object.assign(window, { __cena: cena }); // depuração local
-} catch {
-  // sem WebGL: a página continua legível sobre o fundo escuro
-  canvas.remove();
+// ----------------------------------------------------------------- links para o painel
+document.querySelectorAll<HTMLAnchorElement>("[data-app]").forEach((a) => (a.href = APP_URL));
+document
+  .querySelectorAll<HTMLAnchorElement>("[data-app-cadastro]")
+  .forEach((a) => (a.href = `${APP_URL.replace(/\/$/, "")}/?cadastro`));
+
+// ----------------------------------------------------------------- mapa de calor ilustrativo
+/** Ruído suave e determinístico (mesma imagem a cada visita). */
+function ruido(x: number, y: number) {
+  return (
+    0.5 +
+    0.28 * Math.sin(x * 0.021 + 1.3) * Math.cos(y * 0.034 - 0.4) +
+    0.16 * Math.sin((x + y) * 0.047) +
+    0.08 * Math.cos(x * 0.09 - y * 0.06)
+  );
 }
+const CORES = ["#2f8a57", "#5fa84a", "#a9c23f", "#e9b949", "#e8873a", "#d9482b"];
 
-function maxRolagem() {
-  return Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-}
+function desenharMapa() {
+  const svg = document.getElementById("mapa-calor");
+  if (!svg) return;
+  // contorno do talhão (irregular, como um talhão de verdade)
+  const contorno = "M38 40 L300 22 L372 70 L360 178 L210 204 L60 190 L22 120 Z";
+  const defs = document.createElementNS(SVG, "defs");
+  defs.innerHTML = `<clipPath id="talhao"><path d="${contorno}"/></clipPath>`;
+  svg.append(defs);
 
-/** Cada seção vira dois quadros (entrada e saída do centro da tela): a cena "segura" enquanto se lê. */
-function calcularQuadros() {
-  if (!cena) return;
-  const max = maxRolagem();
-  const vh = window.innerHeight;
-  const lista: { p: number; q: Quadro }[] = [];
-  secoes.forEach((el, i) => {
-    const q = QUADROS[el.dataset.cena!];
-    if (i === 0) {
-      lista.push({ p: 0, q });
-      return;
+  const g = document.createElementNS(SVG, "g");
+  g.setAttribute("clip-path", "url(#talhao)");
+  const r = 9;
+  const w = Math.sqrt(3) * r;
+  let i = 0;
+  for (let linha = 0, y = 0; y < 240; linha++, y += r * 1.5) {
+    for (let x = linha % 2 ? w / 2 : 0; x < 420; x += w) {
+      const v = Math.min(0.999, Math.max(0, ruido(x, y)));
+      const hex = document.createElementNS(SVG, "polygon");
+      const pts = Array.from({ length: 6 }, (_, k) => {
+        const a = (Math.PI / 3) * k + Math.PI / 6;
+        return `${(x + r * 0.94 * Math.cos(a)).toFixed(1)},${(y + r * 0.94 * Math.sin(a)).toFixed(1)}`;
+      }).join(" ");
+      hex.setAttribute("points", pts);
+      hex.setAttribute("fill", CORES[Math.floor(v * CORES.length)]);
+      hex.style.setProperty("--atraso", `${(i++ % 37) * 18 + x * 1.2}ms`);
+      g.append(hex);
     }
-    if (i === secoes.length - 1) {
-      lista.push({ p: 1, q });
-      return;
-    }
-    const centro = el.offsetTop + el.offsetHeight / 2 - vh / 2;
-    const meio = el.offsetHeight * 0.18;
-    lista.push({ p: Math.min(1, (centro - meio) / max), q });
-    lista.push({ p: Math.min(1, (centro + meio) / max), q: { ...q, dist: q.dist + q.segura } });
-  });
-  cena.definirQuadros(lista);
-}
-
-function redimensionar() {
-  cena?.redimensionar(window.innerWidth, window.innerHeight);
-  calcularQuadros();
-}
-window.addEventListener("resize", redimensionar);
-redimensionar();
-document.fonts?.ready.then(calcularQuadros);
-
-// ----------------------------------------------------------------- laço de animação + HUD
-const hud = {
-  vel: document.getElementById("hud-vel")!,
-  area: document.getElementById("hud-area")!,
-  diesel: document.getElementById("hud-diesel")!,
-  lha: document.getElementById("hud-lha")!,
-};
-const fmt = (v: number, casas: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas });
-
-let progresso = 0;
-let anterior = performance.now();
-let velocidade = 0;
-let distHud = 0;
-function quadro(agora: number) {
-  const dt = Math.min(0.05, (agora - anterior) / 1000);
-  anterior = agora;
-  const alvo = window.scrollY / maxRolagem();
-  progresso = menosMovimento ? alvo : progresso + (alvo - progresso) * (1 - Math.exp(-dt * 3.5));
-  if (cena) {
-    cena.quadro(progresso, agora / 1000, dt);
-    const d = cena.distancia;
-    const kmh = dt > 0 ? (Math.abs(d - distHud) / dt) * 0.9 : 0;
-    distHud = d;
-    velocidade += (Math.min(kmh, 12.4) - velocidade) * 0.08;
-    const area = d * 0.52;
-    hud.vel.textContent = fmt(velocidade, 1);
-    hud.area.textContent = fmt(area, 2);
-    hud.diesel.textContent = fmt(area * 4.26 + d * 0.15, 1);
-    hud.lha.textContent = area > 0.5 ? fmt((area * 4.26 + d * 0.15) / area, 2) : "—";
   }
-  requestAnimationFrame(quadro);
-}
-requestAnimationFrame(quadro);
+  svg.append(g);
 
-// ----------------------------------------------------------------- topo, trilho e revelações
-const topo = document.querySelector(".topo")!;
-const pontos = [...document.querySelectorAll<HTMLAnchorElement>(".trilho a")];
-const marcarAtiva = () => {
-  topo.classList.toggle("rolado", window.scrollY > 40);
-  const meio = window.scrollY + window.innerHeight / 2;
-  let ativa = secoes[0].id;
-  for (const s of secoes) if (s.offsetTop <= meio) ativa = s.id;
-  pontos.forEach((p) => {
-    p.classList.toggle("ativo", p.dataset.alvo === ativa);
-    if (p.dataset.alvo === ativa) p.setAttribute("aria-current", "true");
-    else p.removeAttribute("aria-current");
+  // passadas da máquina por cima do mapa
+  const passadas = document.createElementNS(SVG, "g");
+  passadas.setAttribute("clip-path", "url(#talhao)");
+  passadas.setAttribute("class", "passadas");
+  for (let y = 30; y < 210; y += 22) {
+    const p = document.createElementNS(SVG, "path");
+    p.setAttribute("d", `M0 ${y} L420 ${y - 14}`);
+    passadas.append(p);
+  }
+  svg.append(passadas);
+
+  const borda = document.createElementNS(SVG, "path");
+  borda.setAttribute("d", contorno);
+  borda.setAttribute("class", "borda");
+  svg.append(borda);
+
+  // máquina percorrendo a passada
+  const maquina = document.createElementNS(SVG, "circle");
+  maquina.setAttribute("r", "5");
+  maquina.setAttribute("class", "maquina");
+  svg.append(maquina);
+  const anel = document.createElementNS(SVG, "circle");
+  anel.setAttribute("r", "5");
+  anel.setAttribute("class", "anel");
+  svg.append(anel);
+
+  const reduzir = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let t0 = performance.now();
+  const passo = (agora: number) => {
+    const t = ((agora - t0) / 9000) % 1;
+    const faixa = Math.floor(((agora - t0) / 9000) % 7);
+    const ida = faixa % 2 === 0;
+    const x = 40 + (ida ? t : 1 - t) * 320;
+    const y0 = 52 + faixa * 22;
+    const y = y0 - (x / 420) * 14;
+    for (const c of [maquina, anel]) {
+      c.setAttribute("cx", x.toFixed(1));
+      c.setAttribute("cy", y.toFixed(1));
+    }
+    requestAnimationFrame(passo);
+  };
+  if (reduzir) {
+    for (const c of [maquina, anel]) {
+      c.setAttribute("cx", "220");
+      c.setAttribute("cy", "110");
+    }
+  } else {
+    t0 = performance.now();
+    requestAnimationFrame(passo);
+  }
+}
+
+function desenharGrafico() {
+  const linha = document.getElementById("linha-grafico");
+  const area = document.getElementById("area-grafico");
+  if (!linha || !area) return;
+  const n = 24;
+  const pts = Array.from({ length: n }, (_, k) => {
+    const x = (k / (n - 1)) * 300;
+    const v = 0.5 + 0.22 * Math.sin(k * 0.7) + 0.12 * Math.cos(k * 1.9) + (k === 15 ? 0.3 : 0);
+    return [x, 56 - v * 46] as const;
   });
-  document.body.classList.toggle("no-contato", ativa === "contato");
-};
-window.addEventListener("scroll", marcarAtiva, { passive: true });
-marcarAtiva();
+  const d = pts.map(([x, y], k) => `${k ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
+  linha.setAttribute("d", d);
+  area.setAttribute("d", `${d} L300 60 L0 60 Z`);
+}
+
+desenharMapa();
+desenharGrafico();
+
+// ----------------------------------------------------------------- calculadora de economia
+function calculadora() {
+  const campo = (id: string) => document.getElementById(id) as HTMLInputElement;
+  const saida = (id: string) => document.getElementById(id) as HTMLOutputElement;
+  const area = campo("c-area");
+  const passadas = campo("c-passadas");
+  const reducao = campo("c-reducao");
+  const preco = campo("c-preco");
+  const reais = document.getElementById("r-reais")!;
+  const litros = document.getElementById("r-litros")!;
+  if (!area) return;
+
+  const atualizar = () => {
+    const a = Number(area.value);
+    const p = Number(passadas.value);
+    const r = Number(reducao.value);
+    const d = Number(preco.value);
+    saida("o-area").textContent = `${fmt(a)} ha`;
+    saida("o-passadas").textContent = `${p}×`;
+    saida("o-reducao").textContent = `${fmt(r, 1)} L/ha`;
+    saida("o-preco").textContent = `R$ ${fmt(d, 2)}/L`;
+    const l = a * p * r;
+    reais.textContent = `R$ ${fmt(l * d)}`;
+    litros.textContent = `${fmt(l)} litros de diesel a menos`;
+    for (const c of [area, passadas, reducao, preco]) {
+      const pct = ((Number(c.value) - Number(c.min)) / (Number(c.max) - Number(c.min))) * 100;
+      c.style.setProperty("--pct", `${pct}%`);
+    }
+  };
+  document.getElementById("calculadora")!.addEventListener("input", atualizar);
+  atualizar();
+}
+calculadora();
+
+// ----------------------------------------------------------------- topo e menu
+const topo = document.querySelector(".topo")!;
+const marcarRolado = () => topo.classList.toggle("rolado", window.scrollY > 20);
+window.addEventListener("scroll", marcarRolado, { passive: true });
+marcarRolado();
 
 // menu em telas pequenas: botão com aria-expanded, fecha com Esc e ao escolher um item
 const botaoMenu = document.querySelector<HTMLButtonElement>(".menu-botao")!;
@@ -157,23 +184,21 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+// ----------------------------------------------------------------- revelação ao rolar
 const observador = new IntersectionObserver(
   (itens) => {
     for (const it of itens) {
       if (!it.isIntersecting) continue;
       const el = it.target as HTMLElement;
-      const irmaos = [...(el.parentElement?.querySelectorAll(".revela") ?? [])];
-      el.style.transitionDelay = `${Math.max(0, irmaos.indexOf(el)) * 80}ms`;
+      const irmaos = [...(el.parentElement?.querySelectorAll(":scope > .revela") ?? [])];
+      el.style.transitionDelay = `${Math.max(0, irmaos.indexOf(el)) * 70}ms`;
       el.classList.add("visivel");
       observador.unobserve(el);
     }
   },
-  { threshold: 0.15 },
+  { threshold: 0.12 },
 );
 document.querySelectorAll(".revela").forEach((el) => observador.observe(el));
-
-document.querySelectorAll<HTMLAnchorElement>("[data-app]").forEach((a) => (a.href = APP_URL));
-document.querySelectorAll<HTMLAnchorElement>("[data-app-cadastro]").forEach((a) => (a.href = `${APP_URL.replace(/\/$/, "")}/?cadastro`));
 
 // ----------------------------------------------------------------- formulário de demonstração
 const form = document.querySelector<HTMLFormElement>("#form-contato")!;
