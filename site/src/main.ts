@@ -162,6 +162,19 @@ function calculadora() {
 }
 calculadora();
 
+// ----------------------------------------------------------------- planos: mensal ou anual
+const botoesCiclo = [...document.querySelectorAll<HTMLButtonElement>("[data-ciclo]")];
+function mostrarCiclo(ciclo: string) {
+  botoesCiclo.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.ciclo === ciclo)));
+  document.querySelectorAll<HTMLElement>(".preco b[data-mensal]").forEach((b) => {
+    b.textContent = (ciclo === "anual" ? b.dataset.anual : b.dataset.mensal) ?? b.textContent;
+  });
+  document.querySelectorAll<HTMLElement>("[data-anual-total]").forEach((el) => {
+    el.textContent = ciclo === "anual" ? (el.dataset.anualTotal ?? "") : "";
+  });
+}
+botoesCiclo.forEach((b) => b.addEventListener("click", () => mostrarCiclo(b.dataset.ciclo!)));
+
 // ----------------------------------------------------------------- topo e menu
 const topo = document.querySelector(".topo")!;
 const marcarRolado = () => topo.classList.toggle("rolado", window.scrollY > 20);
