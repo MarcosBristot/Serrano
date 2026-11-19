@@ -149,6 +149,13 @@ CATALOGO: list[dict[str, Any]] = [
         "status": "ativa",
     },
     {
+        "id": "trimble_tmx",
+        "categoria": "monitor",
+        "nome": "Trimble TMX-2050 / PTx",
+        "detalhe": "Monitor da Massey Ferguson (AGCO): trajeto, horas e velocidade pelo GPS.",
+        "status": "ativa",
+    },
+    {
         "id": "contornos",
         "categoria": "mapa",
         "nome": "Contornos de talhão",
