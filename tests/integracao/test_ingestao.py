@@ -200,6 +200,7 @@ def test_zip_do_pendrive(
         "contorno": 0,
         "rcd": 0,
         "isoxml": 0,
+        "tsip": 0,
         "duplicados": 1,
     }
 

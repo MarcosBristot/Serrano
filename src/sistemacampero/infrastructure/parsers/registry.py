@@ -8,6 +8,7 @@ from sistemacampero.domain.telemetry import ParseContext
 from sistemacampero.infrastructure.parsers.isoxml import IsoxmlAdapter
 from sistemacampero.infrastructure.parsers.john_deere_gen4 import JohnDeereGen4Adapter
 from sistemacampero.infrastructure.parsers.john_deere_gs3 import JohnDeereGs3Adapter
+from sistemacampero.infrastructure.parsers.trimble_tmx import TrimbleTmxAdapter
 
 
 def _chave(valor: str) -> str:
@@ -56,4 +57,6 @@ class RegistroAdapters:
 
 def registro_padrao() -> RegistroAdapters:
     """Adapters disponíveis em produção. Nova marca: ver docs/como-adicionar-marca.md."""
-    return RegistroAdapters([JohnDeereGen4Adapter(), JohnDeereGs3Adapter(), IsoxmlAdapter()])
+    return RegistroAdapters(
+        [JohnDeereGen4Adapter(), JohnDeereGs3Adapter(), IsoxmlAdapter(), TrimbleTmxAdapter()]
+    )

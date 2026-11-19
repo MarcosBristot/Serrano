@@ -11,9 +11,11 @@ import hashlib
 import io
 import logging
 import posixpath
+import re
 import tempfile
+import zipfile
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from typing import Any, BinaryIO, Protocol, cast
 from uuid import UUID
 
@@ -48,7 +50,9 @@ from sistemacampero.domain.telemetry import EmptyFile, ParseContext
 logger = logging.getLogger(__name__)
 _LINHAS_OMNI = {"cabeceira": "_headland", "linha_guia": "_runline"}
 # O .zip vem marcado como Gen4 (trator); o que está dentro diz a tecnologia de verdade.
-_TECNOLOGIA = {TipoArquivo.RCD: "gs3", TipoArquivo.ISOXML: "isoxml"}
+_TECNOLOGIA = {TipoArquivo.RCD: "gs3", TipoArquivo.ISOXML: "isoxml", TipoArquivo.TSIP: "tmx"}
+_MARCA = {TipoArquivo.ISOXML: "isobus", TipoArquivo.TSIP: "trimble"}
+_PROCESSAVEIS = (TipoArquivo.JDL, TipoArquivo.RCD, TipoArquivo.ISOXML, TipoArquivo.TSIP)
 
 _CONTENT_TYPE = {
     TipoArquivo.JDL: "application/octet-stream",
@@ -58,6 +62,7 @@ _CONTENT_TYPE = {
     TipoArquivo.CONTORNO: "application/octet-stream",
     TipoArquivo.RCD: "application/octet-stream",
     TipoArquivo.ISOXML: "application/octet-stream",
+    TipoArquivo.TSIP: "application/octet-stream",
 }
 _ASSINATURA = {TipoArquivo.JDL: b"\x0d", TipoArquivo.ZIP: b"PK\x03\x04"}
 
@@ -303,6 +308,7 @@ class ExecutorDeJobs:
             "contorno": 0,
             "rcd": 0,
             "isoxml": 0,
+            "tsip": 0,
             "duplicados": 0,
         }
         # ISOBUS: pasta -> {"taskdata.xml": bytes, "tlg00001.xml": bytes, "tlg00001.bin": ...}
@@ -318,6 +324,8 @@ class ExecutorDeJobs:
         with tempfile.TemporaryFile() as arquivo_tmp:
             tmp = cast(BinaryIO, arquivo_tmp)
             self._storage.copiar_para(BUCKET_BRUTOS, str(arquivo["caminho_storage"]), tmp)
+            tmp.seek(0)
+            veiculo, extensoes = _olhar_zip(tmp)
             tmp.seek(0)
             try:
                 for i, entrada in enumerate(zip_seguro.expandir(tmp, self._limites_zip)):
@@ -340,6 +348,9 @@ class ExecutorDeJobs:
                         if par is None:
                             continue
                         entrada = par
+                    if entrada.tipo is TipoArquivo.TSIP and veiculo:
+                        # o modelo do trator vai no nome (o leitor o tira de lá)
+                        entrada = replace(entrada, nome=f"{veiculo} · {entrada.nome}")
                     reg = self._registrar_entrada(org, zip_id, lote_id, arquivo, entrada)
                     if entrada.tipo is TipoArquivo.CONTORNO:
                         base = posixpath.basename(entrada.caminho_no_zip.replace("\\", "/"))
@@ -390,6 +401,16 @@ class ExecutorDeJobs:
                 lote_id,
                 f"importar_contornos:{zip_id}",
             )
+        reconhecidos = sum(v for k, v in contagem.items() if k != "duplicados")
+        if not reconhecidos:
+            motivo = _motivo_sem_formato(extensoes)
+            self._repo.marcar_arquivo(org, zip_id, StatusArquivo.REJEITADO, motivo)
+            return {
+                "status": StatusArquivo.REJEITADO.value,
+                "motivo": motivo,
+                "extensoes": extensoes,
+                **contagem,
+            }
         self._repo.marcar_arquivo(org, zip_id, StatusArquivo.PROCESSADO, None)
         return {"status": StatusArquivo.PROCESSADO.value, **contagem}
 
@@ -581,7 +602,7 @@ class ExecutorDeJobs:
                 BUCKET_BRUTOS, caminho, io.BytesIO(entrada.conteudo), _CONTENT_TYPE[entrada.tipo]
             )
         # MasterData/SpatialFiles ficam guardados para o importador Gen4 (M4).
-        processa = entrada.tipo in (TipoArquivo.JDL, TipoArquivo.RCD, TipoArquivo.ISOXML)
+        processa = entrada.tipo in _PROCESSAVEIS
         job = TipoJob.PROCESSAR_ARQUIVO if processa else None
         return self._repo.registrar_arquivo(
             NovoArquivo(
@@ -591,10 +612,74 @@ class ExecutorDeJobs:
                 tipo=entrada.tipo,
                 tamanho_bytes=len(entrada.conteudo),
                 caminho_storage=caminho,
-                marca="isobus" if entrada.tipo is TipoArquivo.ISOXML else arquivo_zip.get("marca"),
+                marca=_MARCA.get(entrada.tipo, arquivo_zip.get("marca")),
                 tecnologia=_TECNOLOGIA.get(entrada.tipo, arquivo_zip.get("tecnologia")),
                 lote_id=lote_id,
                 arquivo_pai_id=zip_id,
             ),
             job,
         )
+
+
+# Pastas e extensões de monitores que a Serrano ainda não lê: o produtor recebe o nome do sistema.
+_SISTEMAS_CONHECIDOS = {
+    ".cn1": "Case IH / New Holland (AFS, IntelliView)",
+    ".vy1": "Case IH / New Holland (AFS, IntelliView)",
+    ".agdata": "Ag Leader / SMS",
+    ".ilf": "Ag Leader",
+    ".yld": "Ag Leader",
+    ".ag": "Raven",
+    ".fsp": "Topcon",
+    ".tzx": "Topcon",
+}
+
+
+def _olhar_zip(tmp: BinaryIO) -> tuple[str | None, dict[str, int]]:
+    """Antes de expandir: o veículo do monitor Trimble (AgData/Vehicles/*.agv, o nome está no
+    manifesto, sem criptografia) e as extensões presentes (para explicar um zip não reconhecido).
+    """
+    veiculos: list[str] = []
+    extensoes: dict[str, int] = {}
+    try:
+        with zipfile.ZipFile(tmp) as zf:
+            for info in zf.infolist():
+                if info.is_dir():
+                    continue
+                base = posixpath.basename(info.filename.replace("\\", "/"))
+                ext = posixpath.splitext(base.lower())[1] or "(sem extensão)"
+                extensoes[ext] = extensoes.get(ext, 0) + 1
+                if ext == ".agv" and info.file_size < 1024**2:
+                    nome = _nome_veiculo_trimble(zf.read(info))
+                    if nome:
+                        veiculos.append(nome)
+    except zipfile.BadZipFile:
+        return None, {}
+    # dois perfis do mesmo trator ("MF 7725", "MF 7700 7725"): fica o nome mais curto
+    veiculo = min(veiculos, key=len) if veiculos else None
+    top = dict(sorted(extensoes.items(), key=lambda kv: -kv[1])[:8])
+    return veiculo, top
+
+
+def _nome_veiculo_trimble(agv: bytes) -> str | None:
+    try:
+        with zipfile.ZipFile(io.BytesIO(agv)) as z:
+            manifesto = z.read("manifest.xml").decode("utf-8", "replace")
+    except (zipfile.BadZipFile, KeyError):
+        return None
+    m = re.search(r"<name>([^<]{1,80})</name>", manifesto)
+    return re.sub(r"\s+", " ", m.group(1)).strip() if m else None
+
+
+def _motivo_sem_formato(extensoes: dict[str, int]) -> str:
+    sistemas = sorted({_SISTEMAS_CONHECIDOS[e] for e in extensoes if e in _SISTEMAS_CONHECIDOS})
+    lista = ", ".join(f"{e} ({n})" for e, n in extensoes.items()) or "nenhum arquivo"
+    if sistemas:
+        return (
+            f"formato_ainda_nao_suportado: parece ser {' e '.join(sistemas)}. "
+            f"Arquivos encontrados: {lista}. Os arquivos ficam guardados e serão lidos quando "
+            "esse monitor for suportado."
+        )
+    return (
+        "formato_nao_reconhecido: nenhum arquivo de monitor conhecido no .zip. "
+        f"Encontrados: {lista}. Envie a pasta inteira que o monitor gravou no pendrive."
+    )

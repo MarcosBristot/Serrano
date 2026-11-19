@@ -31,6 +31,7 @@ function resumoZip(r: Record<string, unknown>): string {
     n("jdl") && `${n("jdl")} do trator (Gen4)`,
     n("rcd") && `${n("rcd")} da colheitadeira`,
     n("isoxml") && `${n("isoxml")} ISOBUS`,
+    n("tsip") && `${n("tsip")} registros do monitor Trimble (Massey Ferguson)`,
     n("contorno") && `${n("contorno")} arquivos de talhão`,
   ].filter(Boolean);
   return partes.length ? `Encontrado: ${partes.join(", ")}. Processando em seguida.` : "Nenhum arquivo de monitor reconhecido no .zip.";
@@ -55,7 +56,7 @@ export default function Enviar() {
         const st = String(r.status ?? "");
         const msg =
           st === "vazio" ? "Arquivo sem dados do trator (normal: o monitor grava muitos arquivos vazios)."
-          : st === "rejeitado" ? `Arquivo rejeitado: ${String(r.motivo ?? "")}`
+          : st === "rejeitado" ? String(r.motivo ?? "Arquivo rejeitado.").replace(/^[a-z_]+: /, "")
           : st === "bloqueado_plano" ? "Máquina acima do limite do plano."
           : "jdl" in r ? resumoZip(r)
           : `Processado · qualidade ${String(r.qualidade ?? "—")} · ${String(r.alertas ?? 0)} alerta(s).`;

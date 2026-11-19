@@ -60,6 +60,7 @@ class TipoArquivo(StrEnum):
     CONTORNO = "contorno"  # shapefile do talhão (ex.: OMNI): perímetro, cabeceira, linhas-guia
     RCD = "rcd"  # GreenStar 3: par .fdl + .fdd de uma operação (empacotado na expansão do zip)
     ISOXML = "isoxml"  # ISOBUS: TASKDATA.XML + um TLG (.XML/.BIN), de qualquer marca
+    TSIP = "tsip"  # Trimble TMX-2050/PTx (Massey Ferguson, AGCO): registro de GPS da Diagnostics
 
 
 _EXTENSOES = {".jdl": TipoArquivo.JDL, ".zip": TipoArquivo.ZIP, ".gjson": TipoArquivo.GJSON}
@@ -89,12 +90,16 @@ def tipo_do_arquivo(nome: str) -> TipoArquivo | None:
         return TipoArquivo.RCD
     if base.lower() == "taskdata.xml" or _TLG.fullmatch(base.lower()):
         return TipoArquivo.ISOXML
+    if _TSIP_LOGAG.fullmatch(base.lower()):
+        return TipoArquivo.TSIP
     return _EXTENSOES.get(ext)
 
 
 _MAGICO_RCD = b"SERRANO-RCD1\n"
 _MAGICO_ISOXML = b"SERRANO-ISOXML1\n"
 _TLG = re.compile(r"tlg\d{5}\.(xml|bin)")
+# Trimble: TMX_LogAg_<serial do monitor>_<data>_<hora>_<parte>.tsip (PTx_ nos mais novos)
+_TSIP_LOGAG = re.compile(r"(tmx|ptx)_logag_\d+_\d{8}_\d{4}_\d{3}\.tsip")
 
 
 def empacotar_isoxml(nome_tlg: str, taskdata: bytes, cabecalho: bytes, binario: bytes) -> bytes:

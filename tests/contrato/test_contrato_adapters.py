@@ -22,7 +22,7 @@ from sistemacampero.domain.telemetry import (
     ParsedSession,
 )
 from sistemacampero.infrastructure.parsers.registry import registro_padrao
-from tests.sinteticos import gs3, isoxml
+from tests.sinteticos import gs3, isoxml, trimble
 from tests.sinteticos.jdl_builder import Cenario, construir
 
 
@@ -33,11 +33,15 @@ class Amostras:
         trabalho: Callable[[], bytes],
         sem_canal: Callable[[], bytes],
         so_cabecalho: Callable[[], bytes],
+        corrompido: Callable[[], bytes] | None = None,
     ) -> None:
         self.nome_arquivo = nome_arquivo
         self.trabalho = trabalho  # 30 min, 8 km/h, 22 L/h, 1800 RPM, com GPS
         self.sem_canal = sem_canal  # sem o canal de RPM
         self.so_cabecalho = so_cabecalho
+        # Padrão: o arquivo cortado ao meio. Formato de fluxo (registro contínuo), em que o corte
+        # é normal e legível, diz o que é corrompido de verdade.
+        self.corrompido = corrompido or (lambda: (d := trabalho())[: len(d) // 2])
 
 
 AMOSTRAS: dict[tuple[str, str], Amostras] = {
@@ -60,6 +64,15 @@ AMOSTRAS: dict[tuple[str, str], Amostras] = {
         lambda: isoxml.construir(isoxml.CenarioIso(minutos=30, hz=5)),
         lambda: isoxml.construir(isoxml.CenarioIso(minutos=5)),
         lambda: isoxml.construir(isoxml.CenarioIso(so_cabecalho=True)),
+    ),
+    # Trimble TMX-2050: registro de GPS (sem diesel nem RPM no formato). Registro cortado no fim é
+    # normal (monitor desligado no meio); corrompido = bytes sem estrutura de pacote TSIP.
+    ("trimble", "tmx"): Amostras(
+        "Massey Ferguson 7725 · TMX_LogAg_6435439113_20261111_1500_001.tsip",
+        lambda: trimble.construir(trimble.CenarioTrimble(minutos=30)),
+        lambda: trimble.construir(trimble.CenarioTrimble(minutos=5)),
+        lambda: trimble.construir(trimble.CenarioTrimble(so_cabecalho=True)),
+        lambda: b"" + bytes(range(16, 250)) * 300,
     ),
 }
 
@@ -102,7 +115,8 @@ def test_schema_tipos_e_unidades(adapter: TelemetryAdapter) -> None:
     assert {c: str(t) for c, t in df.dtypes.items()} == COLUNAS_UNIVERSAIS
     assert len(df) == pytest.approx(30 * 60, abs=2)
     assert df["speed_kmh"].median() == pytest.approx(8.0, rel=0.01)  # km/h
-    assert df["fuel_rate_lph"].median() == pytest.approx(22.0, rel=0.01)  # L/h
+    if "fuel_rate_lph" not in s.diagnostico.canais_fora_do_formato:  # registro só de GPS
+        assert df["fuel_rate_lph"].median() == pytest.approx(22.0, rel=0.01)  # L/h
     sem_rpm = s.diagnostico.canais_ausentes + s.diagnostico.canais_fora_do_formato
     if "engine_rpm" not in sem_rpm:  # nem todo monitor grava RPM
         assert df["engine_rpm"].median() == pytest.approx(1800.0, rel=0.01)
@@ -148,9 +162,8 @@ def test_so_cabecalho_e_arquivo_vazio_com_motivo(adapter: TelemetryAdapter) -> N
 
 
 def test_corrompido_levanta_arquivo_invalido(adapter: TelemetryAdapter) -> None:
-    dados = _amostras(adapter).trabalho()
     with pytest.raises(ArquivoInvalido):
-        _parse(adapter, dados[: len(dados) // 2])
+        _parse(adapter, _amostras(adapter).corrompido())
 
 
 def test_sem_infinito(adapter: TelemetryAdapter) -> None:
