@@ -78,3 +78,63 @@ def test_zip_sem_formato_conhecido_explica_o_que_achou(
     assert res["status"] == "rejeitado"
     assert res["motivo"].startswith("formato_ainda_nao_suportado")
     assert "Case IH / New Holland" in res["motivo"]
+
+
+def test_implemento_padrao_da_maquina_da_area_ao_trimble(
+    client: TestClient, worker: Worker, org: dict[str, Any], admin: Conn
+) -> None:
+    """O Trimble não diz o implemento: com o padrão da máquina saem área e ha/h."""
+    h = org["auth"]
+    pacote = {
+        f"{PASTA}/Diagnostics/TMX_LogAg_6435439113_20261111_1500_001.tsip": trimble.construir(
+            trimble.CenarioTrimble(minutos=20)
+        ),
+    }
+    upload(client, org, zipar(pacote), nome="Trator Massey.zip")
+    drenar(worker)
+
+    def metricas() -> dict[str, Any]:
+        m = admin.execute(
+            "select ms.* from public.metricas_sessao ms join public.sessoes_trabalho s"
+            " on s.id = ms.sessao_id where s.organizacao_id = %s and ms.vigente",
+            (org["id"],),
+        ).fetchone()
+        assert m is not None
+        return dict(m)
+
+    assert metricas()["area_estimada_ha"] is None  # sem largura não há área
+
+    maquina = client.get("/api/v1/maquinas", headers=h).json()[0]
+    assert maquina["implemento_padrao_id"] is None
+    impl = client.post(
+        "/api/v1/implementos", headers=h, json={"nome": "Plantadeira 9 m", "largura_m": 9}
+    ).json()
+    resp = client.put(
+        f"/api/v1/maquinas/{maquina['id']}/implemento-padrao",
+        headers=h,
+        json={"implemento_id": impl["id"]},
+    )
+    assert resp.status_code == 200, resp.text
+    corpo = resp.json()
+    assert corpo["implemento_padrao_id"] == impl["id"]
+    assert corpo["sessoes_recalculadas"] == 1
+    drenar(worker)
+
+    m = metricas()
+    # 20 min a 8 km/h = 2,67 km x 9 m = 2,4 ha
+    assert m["area_estimada_ha"] == pytest.approx(2.4, rel=0.05)
+    assert m["ha_h"] == pytest.approx(8 * 9 / 10, rel=0.05)
+    sessao = admin.execute(
+        "select i.nome from public.sessoes_trabalho s join public.implementos i"
+        " on i.id = s.implemento_id where s.organizacao_id = %s",
+        (org["id"],),
+    ).fetchone()
+    assert sessao is not None and sessao["nome"] == "Plantadeira 9 m"
+
+    # Implemento de outra organização não pode ser usado.
+    outro = client.put(
+        f"/api/v1/maquinas/{maquina['id']}/implemento-padrao",
+        headers=h,
+        json={"implemento_id": "00000000-0000-0000-0000-000000000001"},
+    )
+    assert outro.status_code == 404

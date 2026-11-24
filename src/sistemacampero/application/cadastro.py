@@ -58,6 +58,14 @@ class ServicoCadastro:
         arquivo = self._repo.corrigir_sessao(org, sessao_id, campos)
         return self.relocalizar(org, [arquivo]) if "talhao_id" in campos else 0
 
+    def definir_implemento_padrao(
+        self, org: UUID, maquina_id: UUID, implemento_id: UUID | None
+    ) -> dict[str, Any]:
+        """Troca o implemento padrão e refaz as sessões da máquina (área, ha/h, L/ha)."""
+        maquina = self._repo.definir_implemento_padrao(org, maquina_id, implemento_id)
+        refeitas = self.relocalizar(org, self._repo.arquivos_da_maquina(org, maquina_id))
+        return {**maquina, "sessoes_recalculadas": refeitas}
+
     def ativar_maquina(self, org: UUID, maquina_id: UUID, ativa: bool) -> dict[str, Any]:
         maquina = self._repo.ativar_maquina(org, maquina_id, ativa)
         reabertos = 0 if ativa else self._ingestao.reabrir_bloqueados(org)

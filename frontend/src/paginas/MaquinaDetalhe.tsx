@@ -7,6 +7,7 @@ import {
 } from "recharts";
 
 import { SeletorPeriodo } from "../componentes/Layout";
+import { ImplementoPadrao } from "../componentes/ImplementoPadrao";
 import { AbaManutencao } from "../componentes/Manutencao";
 import { Mapa, type FC } from "../componentes/Mapa";
 import { Carregando, Erro, IconeMaquina, Kpi, Medidor, Selo, TIPO_MAQUINA, Vazio } from "../componentes/ui";
@@ -70,6 +71,8 @@ export default function MaquinaDetalhe() {
         </div>
         <SeletorPeriodo opcoes={["30d", "safra", "12m", "tudo"]} />
       </section>
+
+      <ImplementoPadrao maquinaId={m.id} semArea={m.motor_h > 0 && m.area_ha < 0.05 && !colhe} />
 
       <div className="mb-6 flex gap-1 rounded-xl border border-white/10 bg-white/5 p-1 sm:inline-flex" role="tablist">
         {([["geral", "Visão geral"], ["operacoes", `Operações (${m.jornadas})`], ["talhoes", `Talhões (${m.talhoes})`], ["manutencao", "Manutenção"]] as const).map(([v, r]) => (

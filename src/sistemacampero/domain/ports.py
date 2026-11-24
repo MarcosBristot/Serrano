@@ -161,6 +161,16 @@ class RepositorioCadastro(Protocol):
 
     def talhao_manual(self, org: UUID, arquivo_id: UUID) -> UUID | None: ...
 
+    def implemento_padrao(self, org: UUID, serial: str | None) -> tuple[str, float] | None:
+        """Nome e largura do implemento padrão da máquina com esse serial (se houver)."""
+        ...
+
+    def arquivos_da_maquina(self, org: UUID, maquina_id: UUID) -> list[UUID]: ...
+
+    def definir_implemento_padrao(
+        self, org: UUID, maquina_id: UUID, implemento_id: UUID | None
+    ) -> dict[str, Any]: ...
+
     def importar(self, org: UUID, imp: ImportacaoCadastro) -> ResumoImportacao: ...
 
     def importar_contornos(

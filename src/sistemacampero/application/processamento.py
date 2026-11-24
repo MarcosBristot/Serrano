@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import io
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from uuid import UUID
 
 import pandas as pd
@@ -28,6 +28,8 @@ from sistemacampero.domain.telemetry import (
 )
 
 BuscaLinhasBase = Callable[[MetadadosSessao], rules.LinhasBase]
+# (nome, largura_m) do implemento padrão da máquina do arquivo, ou None se não houver.
+BuscaImplementoPadrao = Callable[[MetadadosSessao], tuple[str, float] | None]
 
 
 @dataclass(slots=True)
@@ -61,6 +63,7 @@ class ProcessadorDeArquivo:
         talhao_manual_id: UUID | None = None,
         regras: rules.ConfigRegras | None = None,
         linhas_base: BuscaLinhasBase | None = None,
+        implemento_padrao: BuscaImplementoPadrao | None = None,
     ) -> ResultadoSessao | EmptyFile:
         adapter = self._adapters.escolher(dados[:64], ctx)
         lido = adapter.parse(io.BytesIO(dados), ctx)
@@ -68,6 +71,15 @@ class ProcessadorDeArquivo:
             return lido
 
         limpo, relatorio = sanitizar(lido.amostras)
+        if not lido.metadados.implemento_largura_m and implemento_padrao is not None:
+            # O arquivo não diz o implemento (ex.: Trimble só grava GPS): vale o padrão da
+            # máquina, cadastrado pelo gestor. Daí saem área, ha/h, L/ha e o mapa.
+            padrao = implemento_padrao(lido.metadados)
+            if padrao is not None:
+                nome, largura_padrao = padrao
+                lido.metadados = replace(
+                    lido.metadados, implemento_nome=nome, implemento_largura_m=largura_padrao
+                )
         largura = lido.metadados.implemento_largura_m
 
         localizacao = None
