@@ -254,6 +254,11 @@ class ExecutorDeJobs:
             assert self._alertas is not None
             return self._alertas.linhas_base(org, meta, sha)
 
+        def implemento_padrao(meta: Any) -> tuple[str, float] | None:
+            return self._cadastro.implemento_padrao(
+                org, meta.serial_maquina or meta.serial_monitor or "desconhecido"
+            )
+
         try:
             r = self._processador.processar(
                 dados,
@@ -262,6 +267,7 @@ class ExecutorDeJobs:
                 talhao_manual_id=manual,
                 regras=regras,
                 linhas_base=linhas_base if self._alertas else None,
+                implemento_padrao=implemento_padrao,
             )
         except Invalido as exc:  # formato errado/corrompido: não adianta tentar de novo
             self._repo.marcar_arquivo(

@@ -61,7 +61,7 @@ COLUNAS_LISTA: dict[str, str] = {
     ),
     "maquinas": (
         "id, serial, fabricante, modelo, tecnologia, apelido, ativa, primeira_atividade,"
-        " ultima_atividade, criado_em, atualizado_em"
+        " ultima_atividade, implemento_padrao_id, criado_em, atualizado_em"
     ),
     "implementos": "id, nome, largura_m, external_guid, criado_em, atualizado_em",
     "operadores": "id, nome, external_guid, ativo, criado_em, atualizado_em",
@@ -420,6 +420,51 @@ class PostgresRepositorioCadastro:
                     )
             conn.execute("update public.maquinas set ativa = %s where id = %s", (ativa, maquina_id))
         return self.obter(org, "maquinas", maquina_id)
+
+    # ------------------------------------------------------------- implemento padrão
+    def implemento_padrao(self, org: UUID, serial: str | None) -> tuple[str, float] | None:
+        if not serial:
+            return None
+        with self._db.transacao(org) as conn:
+            linha = conn.execute(
+                "select i.nome, i.largura_m from public.maquinas m"
+                " join public.implementos i on i.id = m.implemento_padrao_id"
+                " where m.serial = %s and i.largura_m > 0",
+                (serial,),
+            ).fetchone()
+        if linha is None:
+            return None
+        return str(linha["nome"]), float(linha["largura_m"])
+
+    def definir_implemento_padrao(
+        self, org: UUID, maquina_id: UUID, implemento_id: UUID | None
+    ) -> dict[str, Any]:
+        with self._db.transacao(org) as conn:
+            if implemento_id is not None:
+                # Pela RLS só aparece implemento da própria organização.
+                existe = conn.execute(
+                    "select 1 from public.implementos where id = %s", (implemento_id,)
+                ).fetchone()
+                if existe is None:
+                    raise NaoEncontrado(
+                        "Implemento não encontrado.", codigo="REFERENCIA_INEXISTENTE"
+                    )
+            linha = conn.execute(
+                "update public.maquinas set implemento_padrao_id = %s where id = %s returning id",
+                (implemento_id, maquina_id),
+            ).fetchone()
+            if linha is None:
+                raise NaoEncontrado("Máquina não encontrada.")
+        return self.obter(org, "maquinas", maquina_id)
+
+    def arquivos_da_maquina(self, org: UUID, maquina_id: UUID) -> list[UUID]:
+        with self._db.transacao(org) as conn:
+            linhas = conn.execute(
+                "select distinct arquivo_bruto_id from public.sessoes_trabalho"
+                " where maquina_id = %s",
+                (maquina_id,),
+            ).fetchall()
+        return [linha["arquivo_bruto_id"] for linha in linhas]
 
     # ------------------------------------------------------------- sessões
     def listar_sessoes(

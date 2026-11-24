@@ -104,9 +104,17 @@ class MaquinaOut(BaseModel):
     ativa: bool
     primeira_atividade: datetime | None
     ultima_atividade: datetime | None
+    implemento_padrao_id: UUID | None = None
     criado_em: datetime
     atualizado_em: datetime
     arquivos_reabertos: int | None = None
+    sessoes_recalculadas: int | None = None
+
+
+class ImplementoPadraoIn(BaseModel):
+    """``None`` tira o padrão. As sessões da máquina são refeitas com a nova largura."""
+
+    implemento_id: UUID | None
 
 
 class ImplementoIn(BaseModel):
@@ -291,6 +299,20 @@ def editar_maquina(
         assert c.servico_cadastro is not None
         maquina = c.servico_cadastro.ativar_maquina(ctx.organizacao_id, ident, ativa)
     return maquina
+
+
+@router.put(
+    "/maquinas/{ident}/implemento-padrao",
+    response_model=MaquinaOut,
+    summary="Implemento usado quando o arquivo do monitor não informa (dá área, ha/h e L/ha)",
+)
+def definir_implemento_padrao(
+    c: ContainerDep, ctx: OperarDep, ident: UUID, corpo: ImplementoPadraoIn
+) -> dict[str, Any]:
+    assert c.servico_cadastro is not None
+    return c.servico_cadastro.definir_implemento_padrao(
+        ctx.organizacao_id, ident, corpo.implemento_id
+    )
 
 
 # ------------------------------------------------------------------ implementos
