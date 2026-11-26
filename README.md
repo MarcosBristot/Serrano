@@ -4,6 +4,8 @@
 > agrícolas de diferentes fabricantes (pendrive do monitor) em métricas e alertas acionáveis.
 > Operação inicial: Passo Fundo e região (RS).
 
+📦 **Documentação técnica da entrega (DemoDay):** [`docs/entrega`](docs/entrega/README.md) (arquitetura, DER, API, testes, segurança, infraestrutura, backlog e roadmap).
+
 Estado: **primeira versão completa (M1–M9)** do plano do backend v1. Deploy: [`docs/deploy.md`](docs/deploy.md) ·
 operação: [`docs/runbook.md`](docs/runbook.md) · piloto: [`docs/checklist-piloto.md`](docs/checklist-piloto.md). Decisões em
 [`docs/adr/0004`](docs/adr/0004-backend-v1-fundacao.md) (fundação),
