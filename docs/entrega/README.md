@@ -2,7 +2,13 @@
 
 **Serrano** é uma plataforma SaaS que lê os dados que os monitores das máquinas agrícolas já gravam,
 de marcas diferentes, e mostra ao produtor quanto cada máquina trabalhou, quanto ficou parada e
-quanto custou cada hectare. Feita em Passo Fundo (RS).
+quanto custou cada hectare. Feita em Passo Fundo (RS), para os produtores de Passo Fundo e região.
+
+**Estágio atual:** MVP em produção, validado com 2 fazendas piloto. Hoje o produtor envia pelo
+painel o arquivo que o monitor já grava, em poucos cliques; a partir daí leitura, limpeza, cálculo e
+alertas são automáticos. **A meta é zero trabalho manual**, com os dados chegando direto das
+plataformas online das fabricantes (ver [roadmap](roadmap.md)). A plataforma é independente de
+marca: lê formatos de várias fabricantes, incluindo o padrão ISOBUS.
 
 > 📄 **Versões em PDF e Word:** [Dossiê técnico completo (PDF)](arquivos/Serrano%20-%20Dossi%C3%AA%20t%C3%A9cnico%20completo.pdf)
 > e todos os documentos separados em [`arquivos/`](arquivos). Diagramas em PNG em [`diagramas/`](diagramas).
@@ -18,9 +24,9 @@ quanto custou cada hectare. Feita em Passo Fundo (RS).
 | 🔐 Segurança da informação | [seguranca.md](seguranca.md) | JWT, papéis, RLS, chaves de API, auditoria, LGPD |
 | ☁️ Infraestrutura e deploy | [infraestrutura.md](infraestrutura.md) | Docker Compose, Cloudflare, Supabase Auth, CI/CD |
 | 🚀 MVP em funcionamento | | Painel: https://app.sistemaserrano.com.br · Site: https://sistemaserrano.com.br |
-| 🎬 Vídeo demonstrativo | Roteiro abaixo | (link do vídeo gravado pela equipe) |
+| 🎬 Vídeo demonstrativo | Roteiro abaixo | Link do vídeo informado no formulário |
 | 📋 Backlog e gestão | [backlog.md](backlog.md) | [Pull requests](https://github.com/MarcosBristot/Serrano/pulls?q=is%3Apr) |
-| 📈 Roadmap | [roadmap.md](roadmap.md) | Inclui a nova política de planos |
+| 📈 Roadmap | [roadmap.md](roadmap.md) | Caminho para o zero trabalho manual e política de planos |
 
 Documentação complementar já existente: [ADRs](../adr), [deploy em nuvem](../deploy.md),
 [produção atual](../producao-em-casa.md), [runbook](../runbook.md),
@@ -45,8 +51,10 @@ Gravar a tela do painel em produção (Windows: `Win + Alt + R`; ou OBS), com na
 1. **Problema (20 s):** cada máquina de uma marca, cada monitor num formato; o produtor decide na média.
 2. **Site (15 s):** https://sistemaserrano.com.br, proposta e planos.
 3. **Cadastro e login (20 s):** criar conta e a fazenda; 30 dias grátis.
-4. **Envio do pendrive (40 s):** "Enviar dados", arrastar o zip; mostrar o envio em partes e o
-   processamento; formatos de várias marcas reconhecidos sozinhos.
+4. **Envio do arquivo do monitor (40 s):** "Enviar dados", arrastar o zip; mostrar o envio em
+   partes e o processamento; formatos de várias marcas reconhecidos sozinhos. Dizer com clareza:
+   hoje, no MVP, o produtor envia o arquivo; a meta é zero trabalho manual, com os dados vindo direto
+   da nuvem das fabricantes.
 5. **Início e KPIs (40 s):** horas de motor x trabalho, tempo parado, diesel, L/ha e R$/ha.
 6. **Mapa e talhões (30 s):** trajeto, mapa de calor do consumo, talhão achado pelo GPS.
 7. **Máquina (30 s):** página da máquina, operações, implemento padrão, manutenção pelo horímetro.
