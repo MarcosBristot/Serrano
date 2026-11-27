@@ -23,7 +23,7 @@ O [roadmap](roadmap.md) prevê modelos de aprendizado de máquina quando houver 
 
 | # | Funcionalidade | Como funciona | Código |
 |---|---|---|---|
-| 1 | **Reconhecimento automático de formato** | Olha o nome e os primeiros bytes de cada arquivo (e o conteúdo de zips) e escolhe o leitor certo entre John Deere Gen4, GreenStar 3, ISOBUS e Trimble. Formato desconhecido vira uma explicação ("parece Case IH/New Holland, ainda não suportado"). | `infrastructure/parsers/registry.py`, `application/ingestao.py` |
+| 1 | **Reconhecimento automático de formato** | Olha o nome e os primeiros bytes de cada arquivo (e o conteúdo de zips) e escolhe o leitor certo entre os formatos suportados (ISOBUS, Trimble, John Deere Gen4 e GreenStar 3). Formato desconhecido vira uma explicação ("parece Case IH/New Holland, ainda não suportado"). | `infrastructure/parsers/registry.py`, `application/ingestao.py` |
 | 2 | **Sanitização de sinais** | Valores fisicamente impossíveis (ex.: velocidade acima de 40 km/h, vazão acima de 90 L/h, RPM acima de 3.500) viram "sem valor" e são contados num relatório de auditoria; o bruto nunca é alterado. Quando o fabricante não informa "motor ligado", o sistema deduz cruzando RPM, vazão de diesel e avanço do horímetro. | `domain/services/sanitization.py` |
 | 3 | **Separação trabalho x ociosidade** | Motor ligado e velocidade abaixo do limiar de trabalho = parado. Junta paradas separadas por pausas curtas (tolerância de 30 s) e só alerta acima de 20 min. | `domain/services/rules.py` (`ociosidade`) |
 | 4 | **Linha de base estatística por máquina** | Para cada máquina e tipo de operação, calcula a **mediana** (percentil 50) da vazão de diesel (L/h) e do L/ha nas **últimas 50 operações** com pelo menos 30 min de trabalho. | `infrastructure/persistence/alertas.py` (`linhas_base`) |
@@ -40,7 +40,8 @@ O [roadmap](roadmap.md) prevê modelos de aprendizado de máquina quando houver 
 
 | Integração | Direção | Como |
 |---|---|---|
-| Monitores John Deere (Gen4 e GreenStar 3), ISOBUS (ISO 11783), Trimble TMX-2050/PTx | Entrada | Arquivos do monitor enviados pelo painel ou pela API (upload em partes, zip). |
+| Monitores de várias marcas: ISOBUS (ISO 11783), Trimble TMX-2050/PTx (Massey Ferguson), John Deere Gen4 e GreenStar 3 | Entrada | Hoje: arquivos do monitor enviados pelo produtor no painel ou pela API (upload em partes, zip). |
+| Nuvem das fabricantes (planejada) | Entrada | Conector por fabricante com autorização do produtor (OAuth) e sincronização agendada, rumo ao zero trabalho manual ([roadmap](roadmap.md)). |
 | Contornos de talhão | Entrada | Shapefile (.zip), KML, GeoJSON, ou desenho no mapa. |
 | Webhooks | Saída | Alertas enviados com assinatura HMAC-SHA256, com fila de saída (outbox) e novas tentativas. |
 | E-mail | Saída | Alertas e resumo semanal por SMTP. |

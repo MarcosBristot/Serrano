@@ -27,16 +27,24 @@ A equipe trabalha com **pull requests no GitHub**: cada entrega é uma branch, p
 | 16 | Túnel da Cloudflare em HTTP/2 | 18/11/2026 | [#18](https://github.com/MarcosBristot/Serrano/pull/18) |
 | 17 | Leitor do monitor Trimble (Massey Ferguson) e aviso de formato desconhecido | 19/11/2026 | [#19](https://github.com/MarcosBristot/Serrano/pull/19) |
 | 18 | Implemento padrão da máquina (área para monitores sem implemento) | 24/11/2026 | [#20](https://github.com/MarcosBristot/Serrano/pull/20) |
-| 19 | Documentação técnica para o DemoDay (esta pasta) | 26/11/2026 | branch `docs/entrega-demoday` |
+| 19 | Documentação técnica para o DemoDay (esta pasta) | 26/11/2026 | [#21](https://github.com/MarcosBristot/Serrano/pull/21) |
+| 20 | Versões em PDF e Word da documentação | 26/11/2026 | [#22](https://github.com/MarcosBristot/Serrano/pull/22) |
+| 21 | Revisão final da documentação (coleta de dados, marcas e roadmap alinhados ao plano de negócio) | 27/11/2026 | branch `docs/entrega-revisao-final` |
 
-Fora do código: validação em campo com produtores da região de Passo Fundo (pendrives reais de
-John Deere e Massey Ferguson), pitch deck e apresentação técnica, materiais de redes sociais.
+Fora do código:
+
+- **Validação em campo** com 2 fazendas piloto da região de Passo Fundo, com máquinas de marcas
+  diferentes (John Deere e Massey Ferguson) no mesmo painel, a partir dos arquivos reais dos
+  monitores.
+- **Material de negócio:** plano de negócio, One Page Business Plan, pitch de 5 minutos com roteiro,
+  relatório de uso das fazendas piloto e materiais de redes sociais.
 
 ## A fazer (próximas entregas)
 
 | Prioridade | Item | Por quê |
 |---|---|---|
-| Alta | **Planos novos (Essencial, Profissional, Completo, Grupo)** no banco, no painel e no site, com limite de máquinas e de usuários por plano | Nova política comercial ([roadmap](roadmap.md#planos-comerciais)) |
+| Alta | **Planos novos (Essencial, Profissional, Completo, Grupo)** no banco, no painel e no site, com limite de máquinas e de usuários por plano | Nova política comercial e pilotos pagos no 1º trimestre de 2027 ([roadmap](roadmap.md#planos-comerciais)) |
+| Alta | **Primeiro conector com a nuvem de uma fabricante** (OAuth do produtor, sincronização agendada, mesma fila de jobs) | Primeiro passo para a meta de zero trabalho manual; hoje o produtor envia o arquivo |
 | Alta | Limite de descompactação do zip (hoje 4 GB) alinhado com o limite de envio (10 GB) | Pendrive muito grande pode ser recusado ao abrir |
 | Alta | E-mail transacional (redefinição de senha, alertas) | Hoje só configurável por SMTP; produção sem provedor |
 | Alta | Servidor dedicado ou nuvem | Produção não pode depender de notebook pessoal |
@@ -44,10 +52,13 @@ John Deere e Massey Ferguson), pitch deck e apresentação técnica, materiais d
 | Média | Conta de demonstração com dados de exemplo | Avaliadores e prospects verem o painel cheio |
 | Média | Dados da empresa no site (CNPJ, endereço) | Formalização |
 | Média | Autenticação em dois fatores para donos de conta | Segurança |
-| Baixa | Placeholders do pitch (mercado, rodada, equipe) | Material de captação |
+| Média | Upload retomável | Conexão rural fraca interrompe envios grandes |
+| Média | Leitores Case IH / New Holland | Ampliar as marcas atendidas (3º trimestre de 2027) |
 
 ## Em pesquisa
 
 - Leitura de Case IH / New Holland (AFS, Intelliview), Climate FieldView, telemetria Stara e Jacto.
-- Integração direta com a nuvem John Deere Operations Center (sem pendrive).
+- APIs das plataformas online das fabricantes (autorização, limites de uso e formato dos dados de
+  trabalho) para definir a ordem dos conectores, priorizando as marcas mais presentes nas fazendas
+  clientes.
 - Modelos de aprendizado de máquina para previsão de consumo e anomalias (ver [inteligência](inteligencia.md)).
