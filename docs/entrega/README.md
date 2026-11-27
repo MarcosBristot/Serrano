@@ -4,6 +4,9 @@
 de marcas diferentes, e mostra ao produtor quanto cada máquina trabalhou, quanto ficou parada e
 quanto custou cada hectare. Feita em Passo Fundo (RS).
 
+> 📄 **Versões em PDF e Word:** [Dossiê técnico completo (PDF)](arquivos/Serrano%20-%20Dossi%C3%AA%20t%C3%A9cnico%20completo.pdf)
+> e todos os documentos separados em [`arquivos/`](arquivos). Diagramas em PNG em [`diagramas/`](diagramas).
+
 | Item da submissão | Documento | Links |
 |---|---|---|
 | 💻 Repositório de código | Este repositório (público) | https://github.com/MarcosBristot/Serrano |
